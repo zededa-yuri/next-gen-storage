@@ -1,6 +1,6 @@
 [submodule "linux"]
 	path = linux
-	url = git@github.com:zededa-yuri/linux.git
+	url = ../linux.git
 [submodule "qemu"]
 	path = qemu
-	url = git@github.com:zededa-yuri/qemu.git
+	url = ../qemu.git
