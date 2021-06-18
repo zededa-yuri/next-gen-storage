@@ -6,9 +6,10 @@ next-gen-storage project. Just to provide a way to synchronize
 different repositories (e.g. linux, qemu, potentially open-zfs) and a
 storage for necessary config files and helper scripts.
 
-Links to submodules are relative, so as long as you have `linux` and
-`qemu` repositories on your github/gitlab/whatever, `clone
---recursive` will automagically pull submodules from your repositories.
+Links to submodules are relative, so feel free to clone this
+repository to your github/gitlab/whatever. You just need to clone
+`linux` and `qemu` repositories as well and `clone --recursive` will
+automagically pull submodules from your repositories.
 
 How to build and run
 ====================
