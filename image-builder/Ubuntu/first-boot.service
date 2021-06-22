@@ -1,0 +1,10 @@
+[Unit]
+Description=Fixup some setting which can't be done in docker build
+ConditionPathExists=/root/first-boot.sh
+
+[Service]
+Type=oneshot
+ExecStart=/root/first-boot.sh
+
+[Install]
+WantedBy=multi-user.target
