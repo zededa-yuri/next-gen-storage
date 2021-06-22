@@ -20,3 +20,5 @@ COPY fstab /etc/fstab
 COPY first-boot.service /etc/systemd/system/first-boot.service
 COPY first-boot.sh /root/first-boot.sh
 RUN systemctl enable first-boot.service
+
+RUN touch /root/nvme-test.img && truncate -s 1G /root/nvme-test.img
