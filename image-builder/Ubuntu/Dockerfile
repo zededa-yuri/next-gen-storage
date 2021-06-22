@@ -6,7 +6,7 @@ RUN  apt-get --yes install \
   linux-image-virtual \
   systemd-sysv python3-pip iproute2 git\
   isc-dhcp-client openssh-server iputils-ping dnsutils \
-  python3-configshell-fb
+  python3-configshell-fb libcurl4 libpixman-1-0
 
 RUN pip3 install git+git://git.infradead.org/users/hch/nvmetcli.git
 
