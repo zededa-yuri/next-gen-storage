@@ -27,7 +27,7 @@ def main():
         '-drive', f'file=ubuntu-{args.index}.img,if=virtio',
         "-readconfig", "configs/virthost.cfg",
         "-kernel", "linux/arch/x86_64/boot/bzImage",
-        "-append", "console=ttyS0 root=/dev/vda1",
+        "-append", "console=ttyS0 root=/dev/vda rw",
         "-gdb", f"tcp::{args.index}234",
         '-fsdev', f'local,id=src,path={home}/src,security_model=passthrough,readonly=off',
         '-device', 'virtio-9p-pci,fsdev=src,mount_tag=src',

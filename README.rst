@@ -37,12 +37,19 @@ headaches with resolving paths to sources when using gdb.
    mkdir ../qemu/build && cd ../qemu/build
    ../configure --target-list=x86_64-softmmu --enable-virtfs --extra-cflags='-O0'
    make
-
    cd ../../
+
+   #Build virtual host image
+   image-builder/prepare.sh image-builder/Ubuntu
+   image-builder/imgbuild.sh ubuntu-1.img
+
+   #Run virtual host
    ./qemu-run.py
 
    # from another terminal
-   ssh -p 5551 ubuntu@localhost sudo /users/yuri/src/next-gen-storage/nested-run.py
+   ssh -p 5551 ubuntu@localhost
+   nvmetcli restore /home/yuri/src/next-gen-storage/configs/vhost.json
+   /users/yuri/src/next-gen-storage/nested-run.py
 
 
    

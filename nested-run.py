@@ -21,7 +21,7 @@ def main():
         "-append", "console=ttyS0 root=/dev/vda3",
         "-kernel", f"{script_path}/linux/arch/x86_64/boot/bzImage",
         "-drive", f"file={script_path}/alpine.qcow2,if=virtio",
-        "-readconfig", f"{script_path}/configs/nvme-vhost.cfg",
+        '-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf'
     ]
 
     print("launching:\n" + " ".join(qemu_cmd))
