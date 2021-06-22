@@ -1,4 +1,5 @@
 FROM ubuntu:latest
+ARG HOST_SRC_PATH
 LABEL com.iximiuz-project="docker-to-linux"
 RUN apt-get update -y
 RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tzdata
@@ -21,4 +22,9 @@ COPY first-boot.service /etc/systemd/system/first-boot.service
 COPY first-boot.sh /root/first-boot.sh
 RUN systemctl enable first-boot.service
 
+COPY local-init.service /etc/systemd/system
+RUN systemctl enable local-init.service
+
 RUN touch /root/nvme-test.img && truncate -s 1G /root/nvme-test.img
+RUN ln -s $HOST_SRC_PATH/virtual-host-init.sh /root/local-init.sh
+

@@ -1,0 +1,9 @@
+[Unit]
+Description=Setup debug environment
+
+[Service]
+Type=oneshot
+ExecStart=/root/local-init.sh
+
+[Install]
+WantedBy=multi-user.target

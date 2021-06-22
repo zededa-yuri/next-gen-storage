@@ -29,7 +29,9 @@ function main() {
     local script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
     local repo_root="$(realpath "${script_dir}"/..)"
 
-    if ! docker build "${script_dir}"/"${distr}" -t "${distr}"-img; then
+    docker build "${script_dir}"/"${distr}" -t "${distr}"-img \
+	   --build-arg HOST_SRC_PATH="${repo_root}"
+    if (( $? != 0 )); then
 	echo "Failed to build "${distr}"-img"
 	exit 1
     fi
