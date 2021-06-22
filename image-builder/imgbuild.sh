@@ -1,8 +1,9 @@
 #!/bin/bash
 
-function main() {
+function export_ext_img() {
     local output="$1"
     local docker_image="$2"
+
     if test -f "${output}"; then
 	mv -f "${output}" prev-"${output}"
     fi
@@ -21,4 +22,18 @@ function main() {
     docker container rm "${container}"
 }
 
+function main() {
+    local output="${1:-ubuntu.img}"
+    local distr="${2:-ubuntu}"
+
+    local script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+    local repo_root="$(realpath "${script_dir}"/..)"
+
+    if ! docker build "${script_dir}"/"${distr}" -t "${distr}"-img; then
+	echo "Failed to build "${distr}"-img"
+	exit 1
+    fi
+
+    export_ext_img "${output}" "${distr}"-img
+}
 main "$@"
