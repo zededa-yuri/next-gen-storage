@@ -10,7 +10,7 @@ function main() {
     cp "${HOME}"/.ssh/id_rsa.pub "${output}"/ssh/authorized_keys
 
     echo  "src  ${HOME}/src 9p trans=virtio,version=9p2000.L,posixacl,msize=104857601,cache=loose" > "${output}"/fstab
-    ln -s "${repo_root}"/virt-host-init.sh "${output}"/local-init.sh
+    ln -s "${repo_root}"/virtual-host-init.sh "${output}"/local-init.sh
 }
 
 main "$@"

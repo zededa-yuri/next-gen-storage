@@ -40,16 +40,14 @@ headaches with resolving paths to sources when using gdb.
    cd ../../
 
    #Build virtual host image
-   image-builder/prepare.sh image-builder/Ubuntu
+   image-builder/prepare.sh image-builder/ubuntu
    image-builder/imgbuild.sh ubuntu-1.img
 
    #Run virtual host
    ./qemu-run.py
+   login/pass root:root
 
    # from another terminal
    ssh -p 5551 ubuntu@localhost
    nvmetcli restore /home/yuri/src/next-gen-storage/configs/vhost.json
    /users/yuri/src/next-gen-storage/nested-run.py
-
-
-   
