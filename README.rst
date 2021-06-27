@@ -49,5 +49,5 @@ headaches with resolving paths to sources when using gdb.
    
    # from another terminal, using root/root for login/pass
    ssh -p 5551 root@localhost
-   nvmetcli restore /home/yuri/src/next-gen-storage/configs/vhost.json
-   /users/yuri/src/next-gen-storage/nested-run.py
+   nvmetcli restore proj/configs/vhost.json
+   proj/nested-run.py
