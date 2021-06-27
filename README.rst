@@ -43,11 +43,11 @@ headaches with resolving paths to sources when using gdb.
    image-builder/prepare.sh image-builder/ubuntu
    image-builder/imgbuild.sh ubuntu-1.img
 
-   #Run virtual host
+   #Run virtual host; login/pass are root/root
    ./qemu-run.py
-   login/pass root:root
 
-   # from another terminal
-   ssh -p 5551 ubuntu@localhost
+   
+   # from another terminal, using root/root for login/pass
+   ssh -p 5551 root@localhost
    nvmetcli restore /home/yuri/src/next-gen-storage/configs/vhost.json
    /users/yuri/src/next-gen-storage/nested-run.py
