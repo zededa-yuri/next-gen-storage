@@ -2,8 +2,16 @@
 import subprocess
 import os
 import random
+import argparse
 
 def main():
+    parser = argparse.ArgumentParser(description='Launch nested vm for testing guest')
+    parser.add_argument('--vhost-scsi', '-s',
+                        action='store_true', default=False,
+                        help='Add vhost-scsi device instead of vhost-nvme')
+
+    args = parser.parse_args()
+
     my_pid = os.getpid()
     print(f"my pid is {my_pid}")
 
@@ -21,8 +29,12 @@ def main():
         "-append", "console=ttyS0 root=/dev/vda3",
         "-kernel", f"{script_path}/linux/arch/x86_64/boot/bzImage",
         "-drive", f"file={script_path}/alpine.qcow2,if=virtio",
-        '-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf'
     ]
+
+    if args.vhost_scsi:
+        qemu_cmd += ['-device',  'vhost-scsi-pci,wwpn=naa.000000000000000b,bus=pci.0,addr=0x6']
+    else:
+        qemu_cmd += ['-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf']
 
     print("launching:\n" + " ".join(qemu_cmd))
     p = subprocess.Popen(qemu_cmd)
