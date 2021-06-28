@@ -9,6 +9,8 @@ def main():
     parser.add_argument('--vhost-scsi', '-s',
                         action='store_true', default=False,
                         help='Add vhost-scsi device instead of vhost-nvme')
+    parser.add_argument('--dry-run', action='store_true', default=False,
+                        help='Do not launch only print the command',)
 
     args = parser.parse_args()
 
@@ -36,7 +38,11 @@ def main():
     else:
         qemu_cmd += ['-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf']
 
-    print("launching:\n" + " ".join(qemu_cmd))
+    print("launching:\n" + subprocess.list2cmdline(qemu_cmd))
+
+    if args.dry_run:
+        os.sys.exit(0)
+
     p = subprocess.Popen(qemu_cmd)
     p.wait()
     print("~~~ Goodbye ~~~")
