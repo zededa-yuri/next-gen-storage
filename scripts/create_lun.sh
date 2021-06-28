@@ -24,7 +24,8 @@ mkdir -p /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/lun/lun_0
 
 echo 1 > /sys/kernel/config/target/core/"${fileio_prefix}"/fileio/enable
 
-serial_nexus=$(printf '%x' $(( 16#$serial + 1 )))
+serial_nexus=$(printf '%016x' $(( 16#$serial + 1 )))
+echo "Nexus is "${serial_nexus}""
 echo -n "naa.${serial_nexus}"  > \
     /sys/kernel/config/target/vhost/naa."${serial}"/tpgt_1/nexus
 
