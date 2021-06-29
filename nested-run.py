@@ -12,10 +12,21 @@ def main():
     parser.add_argument('--dry-run', action='store_true', default=False,
                         help='Do not launch only print the command',)
 
+    parser.add_argument('--cgroup', '-c', action='store', default=None,
+                        help='Run in a memory cgroup')
+
     args = parser.parse_args()
 
     my_pid = os.getpid()
     print(f"my pid is {my_pid}")
+
+    if args.cgroup:
+        mem_cgrp_path = os.path.join('/sys/fs/cgroup/memory', args.cgroup)
+        if not os.path.exists(mem_cgrp_path):
+            os.mkdir(mem_cgrp_path)
+
+        with open(mem_cgrp_path + '/tasks', 'w') as f:
+            f.write(f"{my_pid}")
 
     script_path = os.path.realpath(__file__)
     script_path = os.path.dirname(script_path)
