@@ -22,6 +22,22 @@ function export_ext_img() {
     docker container rm "${container}"
 }
 
+function get_ubuntu_tag_arg() {
+    local distr="${1}"
+    local release
+
+    if [[ "${distr}" != "ubuntu" ]]; then
+	return 0
+    fi
+
+    if ! grep Ubuntu /etc/lsb-release > /dev/null 2>&1; then
+       return 0
+    fi
+
+    release="$(lsb_release -rs)"
+    echo --build-arg TAG="${release}"
+}
+
 function main() {
     local output="${1:-ubuntu.img}"
     local distr="${2:-ubuntu}"
@@ -29,8 +45,13 @@ function main() {
     local script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
     local repo_root="$(realpath "${script_dir}"/..)"
 
-    docker build "${script_dir}"/"${distr}" -t "${distr}"-img \
-	   --build-arg HOST_SRC_PATH="${repo_root}"
+
+    docker_cmd=(docker build "${script_dir}"/"${distr}" -t "${distr}"-img)
+    docker_cmd+=(--build-arg HOST_SRC_PATH="${repo_root}")
+    docker_cmd+=( $(get_ubuntu_tag_arg "${distr}") )
+
+    "${docker_cmd[@]}"
+
     if (( $? != 0 )); then
 	echo "Failed to build "${distr}"-img"
 	exit 1

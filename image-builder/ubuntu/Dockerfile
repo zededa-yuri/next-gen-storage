@@ -1,4 +1,5 @@
-FROM ubuntu:latest
+ARG TAG=latest
+FROM ubuntu:${TAG}
 ARG HOST_SRC_PATH
 LABEL com.iximiuz-project="docker-to-linux"
 RUN apt-get update -y
