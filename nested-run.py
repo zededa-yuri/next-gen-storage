@@ -15,6 +15,11 @@ def main():
     parser.add_argument('--cgroup', '-c', action='store', default=None,
                         help='Run in a memory cgroup')
 
+    parser.add_argument('--tcp-serial', '-t', action='store_true',
+                        help='''Attach to a tcp console (e.g netcat) on the host. And use it as
+                        primary console. Do not forget to run "nc -lk
+                        -p 31337" on your host beforehand''')
+
     args = parser.parse_args()
 
     my_pid = os.getpid()
@@ -34,7 +39,10 @@ def main():
     dyn_printk = 'dyndbg="file drivers/nvme/* +p"'
     qemu_cmd = [
         f"{script_path}/qemu/build/qemu-system-x86_64",
-         "-nographic",
+        '-display', 'none',
+        '-chardev', 'stdio,mux=on,id=ch0',
+        '-mon', 'chardev=ch0,mode=readline',
+
         "-enable-kvm", "-m", "1024",
         '-cpu', 'host',
         '-smp', '2',
@@ -44,6 +52,14 @@ def main():
         "-kernel", f"{script_path}/linux/arch/x86_64/boot/bzImage",
         "-drive", f"file={script_path}/alpine.qcow2,if=virtio",
     ]
+
+    if args.tcp_serial:
+        qemu_cmd += [
+            '-chardev', 'socket,port=31337,host=10.0.2.2,id=ch1',
+            '-serial', 'chardev:ch1',
+        ]
+    else:
+        qemu_cmd += ['-serial', 'chardev:ch0']
 
     if args.vhost_scsi:
         qemu_cmd += ['-device',  'vhost-scsi-pci,wwpn=naa.000000000000000b,bus=pci.0,addr=0x6']
