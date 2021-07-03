@@ -31,6 +31,7 @@ def main():
     script_path = os.path.realpath(__file__)
     script_path = os.path.dirname(script_path)
 
+    dyn_printk = 'dyndbg="file drivers/nvme/* +p"'
     qemu_cmd = [
         f"{script_path}/qemu/build/qemu-system-x86_64",
          "-nographic",
@@ -39,7 +40,7 @@ def main():
         '-smp', '2',
         "-device", "e1000,netdev=net0",
         "-netdev", "user,id=net0,hostfwd=tcp::5551-:22",
-        "-append", "console=ttyS0 root=/dev/vda3",
+        "-append", f"console=ttyS0 root=/dev/vda3 {dyn_printk}",
         "-kernel", f"{script_path}/linux/arch/x86_64/boot/bzImage",
         "-drive", f"file={script_path}/alpine.qcow2,if=virtio",
     ]
