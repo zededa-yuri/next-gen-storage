@@ -23,7 +23,12 @@ def main():
         "-nographic",
         "-cpu", "host",
         "-smp", "6",
-        "-device", "e1000,netdev=net0", "-netdev", f"user,id=net0,hostfwd=tcp::555{args.index}-:22",
+        "-device", "e1000,netdev=net0", "-netdev",
+
+        "user,id=net0" +
+        f",hostfwd=tcp::555{args.index}-:22" +
+        f",hostfwd=tcp::{args.index}2345-:1234",
+
         '-drive', f'file=ubuntu-{args.index}.img,if=virtio',
         "-readconfig", "configs/virthost.cfg",
         "-kernel", "linux/arch/x86_64/boot/bzImage",

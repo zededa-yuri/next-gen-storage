@@ -51,6 +51,7 @@ def main():
         "-append", f"console=ttyS0 root=/dev/vda3 {dyn_printk}",
         "-kernel", f"{script_path}/linux/arch/x86_64/boot/bzImage",
         "-drive", f"file={script_path}/alpine.qcow2,if=virtio",
+        "-gdb", f"tcp::1234",
     ]
 
     if args.tcp_serial:
