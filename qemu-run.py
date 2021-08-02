@@ -27,7 +27,8 @@ def main():
 
         "user,id=net0" +
         f",hostfwd=tcp::555{args.index}-:22" +
-        f",hostfwd=tcp::{args.index}2345-:1234",
+        f",hostfwd=tcp::{args.index}2345-:1234" +
+        f",hostfwd=tcp::{args.index}3333-:3333",
 
         '-drive', f'file=ubuntu-{args.index}.img,if=virtio',
         "-readconfig", "configs/virthost.cfg",

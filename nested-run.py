@@ -13,6 +13,12 @@ def main():
                         action='store_true', default=False,
                         help='Do not add any test volumes, just run alpine')
 
+    parser.add_argument('--gdbserver', '-g',
+                        action='store_true', default=False,
+                        help='Run qemu with gdbserver attached. '
+                        'Note that server runs against the qemu itself, '
+                        'not the guest kernel')
+
     parser.add_argument('--dry-run', action='store_true', default=False,
                         help='Do not launch only print the command',)
 
@@ -71,12 +77,24 @@ def main():
     elif not args.no_test_volume:
         qemu_cmd += ['-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf']
 
-    print("launching:\n" + subprocess.list2cmdline(qemu_cmd))
+
+    gdbserver_cmd = [
+        "gdbserver", "0.0.0.0:3333",
+        qemu_cmd[0],
+        subprocess.list2cmdline(qemu_cmd[1:])
+    ]
+
+    if args.gdbserver:
+        command = gdbserver_cmd
+    else:
+        command = qemu_cmd
+
+    print("launching:\n" + subprocess.list2cmdline(command))
 
     if args.dry_run:
         os.sys.exit(0)
 
-    p = subprocess.Popen(qemu_cmd)
+    p = subprocess.Popen(command)
     p.wait()
     print("~~~ Goodbye ~~~")
     
