@@ -9,6 +9,10 @@ def main():
     parser.add_argument('--vhost-scsi', '-s',
                         action='store_true', default=False,
                         help='Add vhost-scsi device instead of vhost-nvme')
+    parser.add_argument('--no-test-volume', '-n',
+                        action='store_true', default=False,
+                        help='Do not add any test volumes, just run alpine')
+
     parser.add_argument('--dry-run', action='store_true', default=False,
                         help='Do not launch only print the command',)
 
@@ -64,7 +68,7 @@ def main():
 
     if args.vhost_scsi:
         qemu_cmd += ['-device',  'vhost-scsi-pci,wwpn=naa.000000000000000b,bus=pci.0,addr=0x6']
-    else:
+    elif not args.no_test_volume:
         qemu_cmd += ['-device',  'vhost-kernel-nvme,bus=pci.0,addr=0x5,serial=deadbeaf']
 
     print("launching:\n" + subprocess.list2cmdline(qemu_cmd))
