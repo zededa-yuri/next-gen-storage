@@ -1,1 +1,16 @@
+bcrypt==3.2.0
+cffi==1.14.6
 click==8.0.1
+cryptography==3.4.7
+future==0.18.2
+netmiko==3.4.0
+ntc-templates==2.2.0
+paramiko==2.7.2
+pkg_resources==0.0.0
+pycparser==2.20
+PyNaCl==1.4.0
+pyserial==3.5
+scp==0.13.6
+six==1.16.0
+tenacity==8.0.1
+textfsm==1.1.2
