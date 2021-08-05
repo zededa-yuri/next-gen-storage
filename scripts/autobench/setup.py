@@ -6,6 +6,7 @@ setup(
     install_requires=[
         'Click',
         'netmiko',
+        'parallel-ssh',
     ],
 
     entry_points={

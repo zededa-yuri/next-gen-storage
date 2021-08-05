@@ -7,6 +7,9 @@ import logging
 import shutil
 import datetime
 import subprocess
+import gevent
+from pssh.clients import SSHClient
+
 
 logger = logging.getLogger('autobench')
 logger.setLevel(logging.DEBUG)
@@ -25,20 +28,10 @@ def cli():
 class bench_set:
     def __init__(self, out_dir, target):
         self.out_dir = out_dir
-
-        key_file = os.path.expanduser("~/.ssh/id_rsa")
-        host = {
-            'device_type': 'linux_ssh',
-            'host':   target,
-            'username': 'yuri',
-            "use_keys": True,
-            "key_file": key_file,
-        }
-
-        self.host = ConnectHandler(**host)
-        self.target_home = self.host.send_command('pwd')
+        self.host = SSHClient(target)
+        self.target_home = ''.join(self.host.run_command('pwd').stdout)
         logger.debug(f'target home is {self.target_home}')
-    
+
     def gen_qemu_config(self):
         config = configparser.ConfigParser()
         config['machine'] = {
@@ -61,11 +54,10 @@ class bench_set:
     def start_qemu(self):
         self.gen_qemu_config()
 
-        file_transfer(self.host, source_file=os.path.join(self.out_dir, self.qemu_config),
-                      dest_file='qemu.cfg',
-                      file_system='/tmp',
-                      direction='put',
-                      overwrite_file=True)
+        logger.debug("uploading /tmp/qemu.cfg")
+        cmds = self.host.copy_file(os.path.join(self.out_dir, self.qemu_config),
+                                   '/tmp/qemu.cfg')
+
                                                          
         qemu_bin = os.path.join(self.target_home, 'qemu/build/qemu-system-x86_64')
         qemu_cmd = [
@@ -88,14 +80,17 @@ class bench_set:
 
         qemu_cmd_str = subprocess.list2cmdline(qemu_cmd)
         logger.debug(f'launching {qemu_cmd_str}')
-        output = self.host.send_command(qemu_cmd_str)
-        print(output)
+        qemu_proc = self.host.run_command(qemu_cmd_str)
+        self.host.wait_finished(qemu_proc)
+        print(qemu_proc)
+        print('\n'.join(qemu_proc.stdout))
+
 
     def create_work_dir(self):
         self.start_time = datetime.datetime.utcnow()
         target_out_dir = os.path.join(self.target_home, f'bench-{self.start_time.isoformat()}')
         logger.debug(f'creating target dir {target_out_dir}')
-        self.host.send_command(f'mkdir {target_out_dir}')
+        self.host.run_command(f'mkdir {target_out_dir}')
         self.target_out_dir = target_out_dir
     
 @cli.command()
