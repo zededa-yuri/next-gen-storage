@@ -6,6 +6,7 @@ import (
 	"os"
 	"fmt"
 	"bytes"
+	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
@@ -18,6 +19,12 @@ func main() {
 	//
 	// If you have an encrypted private key, the crypto/x509 package
 	// can be used to decrypt it.
+
+	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(dir)
 
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
