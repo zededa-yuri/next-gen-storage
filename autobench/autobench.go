@@ -10,7 +10,21 @@ import (
 
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
+	"github.com/jessevdk/go-flags"
 )
+
+func argparse() {
+	var opts struct {
+		Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+	}
+
+	_, err := flags.Parse(&opts)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Verbosity: %v\n", opts.Verbose)
+}
 
 func main() {
 	// var hostKey ssh.PublicKey
@@ -19,6 +33,8 @@ func main() {
 	//
 	// If you have an encrypted private key, the crypto/x509 package
 	// can be used to decrypt it.
+
+	argparse()
 
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
