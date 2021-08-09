@@ -13,18 +13,30 @@ import (
 	"github.com/jessevdk/go-flags"
 )
 
-func argparse() {
-	var opts struct {
-		Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
-	}
+type Options struct {
+	Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+}
 
-	_, err := flags.Parse(&opts)
-	if err != nil {
-		panic(err)
+var opts Options
+var parser = flags.NewParser(&opts, flags.Default)
+
+func argparse() {
+	fmt.Printf("parsing arguments\n")
+	if _, err := parser.Parse(); err != nil {
+		switch flagsErr := err.(type) {
+		case flags.ErrorType:
+			if flagsErr == flags.ErrHelp {
+				os.Exit(0)
+			}
+			os.Exit(1)
+		default:
+			os.Exit(1)
+		}
 	}
 
 	fmt.Printf("Verbosity: %v\n", opts.Verbose)
 }
+
 
 func main() {
 	// var hostKey ssh.PublicKey
