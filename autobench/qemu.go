@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"time"
 	"os/exec"
+	"context"
 )
 
 type QemuCommand struct {
@@ -13,21 +15,33 @@ type QemuCommand struct {
 
 var qemu_command QemuCommand
 
-func (x *QemuCommand) Execute(args []string) error {
-	fmt.Printf("Calling command, gdb=%v, verbose=%v, args are %s\n", x.Gdb, x.Verbose, args)
-
-	cmd := exec.Command("ls", "-lah")
+func qemu_run(ctx context.Context, cancel context.CancelFunc) {
+	cmd := exec.CommandContext(ctx, "sleep", "6")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
 	fmt.Printf("Running a command\n")
 	err := cmd.Run()
 
-	if err != nil {
-		return err
+	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+		fmt.Printf("Cancelled: %v\n", ctx.Err())
+		return
+	} else if err != nil {
+		fmt.Printf("error launching command: %v; err=%v\n", err, ctx.Err())
+		cancel()
+	} else {
+		fmt.Printf("command returned:\n%s\n", out)
 	}
 
-	fmt.Printf("command returned:\n%s\n", out)
+}
+
+func (x *QemuCommand) Execute(args []string) error {
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
+	defer cancel()
+
+	qemu_run(ctx, cancel)
+	
 	return nil
 }
 
