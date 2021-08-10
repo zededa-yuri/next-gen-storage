@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"time"
+	"os"
 	"os/exec"
 	"context"
+	"text/template"
 )
+
 
 type QemuCommand struct {
 	Gdb bool `short:"g" long:"gdb" description:"just at test argurment"`
@@ -16,12 +19,25 @@ type QemuCommand struct {
 var qemu_command QemuCommand
 
 func qemu_run(ctx context.Context, cancel context.CancelFunc) {
+	t, err := template.New("qemu").Parse(qemuConfTemplate)
+
+	type mainTemplateArgs struct {
+		foo string
+	}
+
+	template_args := mainTemplateArgs{"bar"}
+
+	err = t.Execute(os.Stdout, template_args)
+	if err !=  nil {
+		fmt.Printf("cant parse template")
+	}
+
 	cmd := exec.CommandContext(ctx, "sleep", "6")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 
 	fmt.Printf("Running a command\n")
-	err := cmd.Run()
+	err = cmd.Run()
 
 	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 		fmt.Printf("Cancelled: %v\n", ctx.Err())
