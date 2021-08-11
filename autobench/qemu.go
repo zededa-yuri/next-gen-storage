@@ -53,7 +53,7 @@ type SshConnection struct {
 	client *ssh.Client
 }
 
-func (connection SshConnection) Init() error {
+func (connection SshConnection) Init(ctx context.Context) error {
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
 	log.Printf("Loading keyfile %s\n", key_path)
@@ -96,6 +96,9 @@ func (connection SshConnection) Init() error {
 		}
 		log.Printf("sleeping 1 sec\n")
 		time.Sleep(time.Second)
+		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+			return ctx.Err()
+		}
 	}
 
 
@@ -145,19 +148,25 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		cancel()
 	} else {
 		fmt.Printf("command returned:\n%s\n", out)
+		cancel()
 	}
 
 }
 
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
+
+	/* XXX: give the process a chance to terminate. Proper waiting is
+	 *  required here
+	 */
+	defer time.Sleep(time.Second)
 	defer cancel()
 
 	go qemu_run(ctx, cancel)
 
 	var connection SshConnection
-	connection.Init()
+	connection.Init(ctx)
 	fmt.Printf("connection established\n")
 
 	return nil
