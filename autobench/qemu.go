@@ -1,13 +1,17 @@
 package main
 
 import (
+	"io/ioutil"
+	"log"
 	"bytes"
 	"fmt"
-	"time"
 	"os"
 	"os/exec"
 	"context"
 	"text/template"
+	"golang.org/x/crypto/ssh"
+	kh "golang.org/x/crypto/ssh/knownhosts"
+	"time"
 )
 
 
@@ -40,6 +44,68 @@ func write_main_config(path string, template_args mainTemplateArgs) error {
 		fmt.Printf("cant parse template")
 		return err
 	}
+
+	return nil
+}
+
+
+type SshConnection struct {
+	client *ssh.Client
+}
+
+func (connection SshConnection) Init() error {
+	home := os.Getenv("HOME")
+	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
+	log.Printf("Loading keyfile %s\n", key_path)
+	key, err := ioutil.ReadFile(key_path)
+	if err != nil {
+		log.Fatalf("unable to read private key: %v", err)
+	}
+
+	// Create the Signer for this private key.
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		log.Fatalf("unable to parse private key: %v", err)
+	}
+
+	signer = signer
+
+	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
+	hostKeyCallback, err := kh.New(known_hosts_path)
+	if err != nil {
+		log.Fatal("could not create hostkeycallback function: ", err)
+	}
+
+	config := &ssh.ClientConfig{
+		User: "ubuntu",
+		Auth: []ssh.AuthMethod{
+			// Use the PublicKeys method for remote authentication.
+			ssh.PublicKeys(signer),
+		},
+		HostKeyCallback: hostKeyCallback,
+	}
+
+	var client *ssh.Client
+	for i := 0; i < 20; i++ {
+		log.Printf("Dialing in\n")
+		client, err = ssh.Dial("tcp", "localhost:6666", config)
+		if err != nil {
+			log.Printf("unable to connect: %v", err)
+		} else {
+			break
+		}
+		log.Printf("sleeping 1 sec\n")
+		time.Sleep(time.Second)
+	}
+
+
+	if err != nil {
+		log.Printf("failed to establish connection after serveral attempts\n")
+		return err
+	}
+	// Connect to the remote server and perform the SSH handshake.
+
+	connection.client = client
 
 	return nil
 }
@@ -88,8 +154,12 @@ func (x *QemuCommand) Execute(args []string) error {
 	ctx, cancel := context.WithTimeout(ctx, 5 * time.Second)
 	defer cancel()
 
-	qemu_run(ctx, cancel)
-	
+	go qemu_run(ctx, cancel)
+
+	var connection SshConnection
+	connection.Init()
+	fmt.Printf("connection established\n")
+
 	return nil
 }
 
