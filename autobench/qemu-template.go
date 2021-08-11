@@ -66,4 +66,21 @@ const qemuConfTemplate = `
 
 [msg]
   timestamp = "on"
+
+[chardev "ch0"]
+  backend = "socket"
+  path = "qemu.serial.socket"
+  server = "on"
+  wait = "off"
+  logfile = "guest.log"
+
+[chardev "charmonitor"]
+  backend = "socket"
+  path = "qemu.monitor.socket"
+  server = "on"
+  wait = "off"
+
+[mon "charmonitor"]
+  mode = "readline"
+  chardev = "charmonitor"
 `
