@@ -5,12 +5,15 @@ import (
 	"log"
 	"os"
 	"fmt"
-	"bytes"
+	//	"bytes"
 	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
 	"github.com/jessevdk/go-flags"
+	"github.com/pkg/sftp"
+	"io"
+	//	"bufio"
 )
 
 type Options struct {
@@ -38,6 +41,49 @@ func argparse() {
 }
 
 
+func upload_files(conn *ssh.Client) {
+	client, err := sftp.NewClient(conn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer client.Close()
+
+	fmt.Printf("using open\n")
+	// f, err := client.Create("hello3.txt")
+	f, err := client.OpenFile("hello3.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// src_f, err := os.Open("tests/storage-bench/run.sh")
+	src_f, err := os.Open("100M_file")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer src_f.Close()
+
+	// var data_source io.Reader
+	// data_source = src_f
+
+	// data_source := bufio.NewReader(src_f)
+
+	// type writerOnly struct{ io.Writer }
+	// bw := bufio.NewWriter(writerOnly{f}) // no ReadFrom()
+	// ret, err := bw.ReadFrom(data_source)
+		// ret, err := f.ReadFrom(data_source)
+
+	//	fmt.Printf("%d bytes written, err is %v\n", ret, err)
+
+	// if _, err := f.Write([]byte("Hello world!\n")); err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	io.CopyBuffer(f, src_f, nil)
+
+	f.Sync()
+	f.Close()
+}
+
 func main() {
 	// var hostKey ssh.PublicKey
 	// A public key may be used to authenticate against the remote
@@ -48,7 +94,6 @@ func main() {
 
 	argparse()
 
-	return
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		log.Fatal(err)
@@ -91,14 +136,16 @@ func main() {
 	}
 	defer client.Close()
 	
-	ss, err := client.NewSession()
-	if err != nil {
-		log.Fatal("unable to create SSH session: ", err)
-	}
-	defer ss.Close()
+	// ss, err := client.NewSession()
+	// if err != nil {
+	// 	log.Fatal("unable to create SSH session: ", err)
+	// }
+	// defer ss.Close()
 
-	var stdoutBuf bytes.Buffer
-	ss.Stdout = &stdoutBuf
-	ss.Run("uname -a")
-	log.Printf("--output:\n%s\n", stdoutBuf)
+	// var stdoutBuf bytes.Buffer
+	// ss.Stdout = &stdoutBuf
+	// ss.Run("uname -a")
+	// log.Printf("--output:\n%s\n", stdoutBuf)
+
+	upload_files(client)
 }
