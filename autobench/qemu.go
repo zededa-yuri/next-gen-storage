@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"os/exec"
 	"context"
 	"text/template"
@@ -113,10 +114,19 @@ func (connection SshConnection) Init(ctx context.Context) error {
 	return nil
 }
 
+func get_self_path() (string) {
+	ex, err := os.Executable()
+	if err != nil {
+		panic(err)
+	}
+	return filepath.Dir(ex)
+}
+
 func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
 	template_args := mainTemplateArgs{"bar"}
 
+	fmt.Printf("selfpath is %s\n", get_self_path())
 	qemu_main_config_path := "qemu.cfg"
 	err := write_main_config(qemu_main_config_path, template_args)
 	if err != nil {
