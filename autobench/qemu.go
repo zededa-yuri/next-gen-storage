@@ -164,6 +164,7 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 }
 
 func (x *QemuCommand) Execute(args []string) error {
+	return nil
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
 
