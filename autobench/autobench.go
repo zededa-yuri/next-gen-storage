@@ -12,8 +12,9 @@ import (
 	kh "golang.org/x/crypto/ssh/knownhosts"
 	"github.com/jessevdk/go-flags"
 	"github.com/pkg/sftp"
-	"io"
+	//	"io"
 	//	"bufio"
+
 )
 
 type Options struct {
@@ -49,14 +50,12 @@ func upload_files(conn *ssh.Client) {
 	defer client.Close()
 
 	fmt.Printf("using open\n")
-	// f, err := client.Create("hello3.txt")
 	f, err := client.OpenFile("hello3.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// src_f, err := os.Open("tests/storage-bench/run.sh")
-	src_f, err := os.Open("100M_file")
+	src_f, err := os.Open("tests/storage-bench/run.sh")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,20 +66,18 @@ func upload_files(conn *ssh.Client) {
 
 	// data_source := bufio.NewReader(src_f)
 
+	// This is supposed to be faster, but it is terribly slow.. No idea why
 	// type writerOnly struct{ io.Writer }
 	// bw := bufio.NewWriter(writerOnly{f}) // no ReadFrom()
-	// ret, err := bw.ReadFrom(data_source)
-		// ret, err := f.ReadFrom(data_source)
+	// ret, err := bw.ReadFrom(src_f)
+	// //	ret, err := f.ReadFrom(src_f)
 
-	//	fmt.Printf("%d bytes written, err is %v\n", ret, err)
 
-	// if _, err := f.Write([]byte("Hello world!\n")); err != nil {
-	// 	log.Fatal(err)
-	// }
+	buf, err := ioutil.ReadAll(src_f)
+	if _, err := f.Write(buf); err != nil {
+		log.Fatal(err)
+	}
 
-	io.CopyBuffer(f, src_f, nil)
-
-	f.Sync()
 	f.Close()
 }
 
@@ -102,6 +99,7 @@ func main() {
 
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
+
 	log.Printf("Loading keyfile %s\n", key_path)
 	key, err := ioutil.ReadFile(key_path)
 	if err != nil {
