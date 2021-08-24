@@ -1,0 +1,42 @@
+#cloud-config
+ssh_pwauth: Yes
+hostname: pocuser
+users:
+  - name: pocuser
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+chpasswd:
+  list: |
+      pocuser:pocuser
+  expire: false
+final_message: "The system is finally up, after $UPTIME seconds"
+package_update: true
+package_upgrade: true
+
+
+packages:
+ - apt-transport-https
+ - ca-certificates
+ - curl
+ - gnupg
+ - lsb-release
+
+# create the docker group
+groups:
+  - docker
+
+# Add default auto created user to docker group
+system_info:
+  default_user:
+    groups: [docker]
+
+# Install Docker, for production, consider pinning to stable versions
+runcmd:
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+  - add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io
+  - systemctl start docker
+  - systemctl enable docker
+  - /usr/bin/sleep 10
+  - sudo docker run -e FIO_OPTYPE='read,write,randread,randwrite' -e FIO_BS='4k,64k,1m' -e FIO_DEPTH='1,8,32' -e FIO_TIME=120 -e GIT_LOCAL=true lfedge/eden-fio-tests:83cfe07
