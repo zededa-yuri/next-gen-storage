@@ -114,6 +114,12 @@ func (connection SshConnection) Init(ctx context.Context) error {
 	return nil
 }
 
+// func (connection SshConnection) Upload(ctx context.Context, path string) error {
+// 	session := connection.client.NewSession()
+// 	defer session.Close()
+
+// }
+
 func get_self_path() (string) {
 	ex, err := os.Executable()
 	if err != nil {
