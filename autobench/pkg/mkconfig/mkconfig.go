@@ -1,143 +1,10 @@
 package mkconfig
 
 import (
-	"errors"
 	"fmt"
+	"time"
 	"os"
-	"strconv"
-	"strings"
 )
-
-func contains(hs []string, val string) bool {
-	for _, v := range hs {
-		if v == val {
-			return true
-		}
-	}
-	return false
-}
-
-func containsInt(hs []int, val int) bool {
-	for _, v := range hs {
-		if v == val {
-			return true
-		}
-	}
-	return false
-}
-
-type OpType []string
-
-func (t *OpType) Set(v string) error {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	v = strings.ToLower(v)
-	var val = strings.Split(v, ",")
-	*t = []string{}
-	var valid = []string{"read", "write", "randread", "randwrite", "readwrite"}
-	for _, s := range val {
-		if !contains(valid, s) {
-			return errors.New("Invalid value for type " + s)
-		}
-		*t = append(*t, s)
-	}
-
-	return nil
-}
-
-func (t OpType) String() string {
-	return strings.Join(t, ",")
-}
-
-type BlockSize []string
-
-func (bs *BlockSize) Set(v string) error {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	v = strings.ToLower(v)
-	var val = strings.Split(v, ",")
-	var valid = []string{"512", "1k", "2k", "4k", "8k", "16k", "32k", "64k", "128k", "256k", "512k", "1m"}
-	*bs = []string{}
-	for _, s := range val {
-		if !contains(valid, s) {
-			return errors.New("Invalid value for block size " + s)
-		}
-		*bs = append(*bs, s)
-	}
-
-	return nil
-}
-
-func (bs BlockSize) String() string {
-	return strings.Join(bs, ",")
-}
-
-type JobsType []int
-
-func (j *JobsType) Set(v string) error {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	v = strings.ToLower(v)
-	var val = strings.Split(v, ",")
-	*j = []int{}
-	var valid = []int{1, 4, 8, 16, 32}
-	for _, s := range val {
-		n, err := strconv.Atoi(s)
-		if err != nil || !containsInt(valid, n) {
-			return errors.New("Invalid value for jobs " + s)
-		}
-		*j = append(*j, n)
-	}
-
-	return nil
-}
-
-func (j JobsType) String() string {
-	var sVal []string
-	for _, n := range j {
-		sVal = append(sVal, strconv.Itoa(n))
-	}
-	return strings.Join(sVal, ",")
-}
-
-type DepthType []int
-
-func (d *DepthType) Set(v string) error {
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	v = strings.ToLower(v)
-	var val = strings.Split(v, ",")
-	*d = []int{}
-	var valid = []int{1, 4, 8, 16, 32}
-	for _, s := range val {
-		n, err := strconv.Atoi(s)
-		if err != nil || !containsInt(valid, n) {
-			return errors.New("Invalid value for depth " + s)
-		}
-		*d = append(*d, n)
-	}
-
-	return nil
-}
-
-func (d DepthType) String() string {
-	var sVal []string
-	for _, n := range d {
-		sVal = append(sVal, strconv.Itoa(n))
-	}
-	return strings.Join(sVal, ",")
-}
-
-/* var fType = OpType{"read", "write"}
-var fBS = BlockSize{"4k", "64k", "1m"}
-var fJobs = JobsType{1, 8}
-var fDepth = DepthType{1, 8, 32}
-var fTime string
-var outPath string */
 
 const globalTpl = `[global]
 ioengine=libaio
@@ -170,39 +37,141 @@ numjobs=%d
 stonewall
 `
 
-func GenerateFIOConfig(fType OpType, fBS BlockSize, fJobs JobsType, fDepth DepthType, fTime, outPath string) {
-	var countTests = len(fType) * len(fBS) * len(fDepth) * len(fJobs)
-	var ftPath = "/fio.test.file"
- 	fmt.Fprintln(os.Stderr, "type:", fType)
-	fmt.Fprintln(os.Stderr, "bs:", fBS)
-	fmt.Fprintln(os.Stderr, "jobs:", fJobs)
-	fmt.Fprintln(os.Stderr, "depth:", fDepth)
-	fmt.Fprintln(os.Stderr, "time:", fTime)
+// Type of I/O pattern.
+type OperationType string
+const (
+	// Sequential reads.
+	OperationTypeRead OperationType = "read"
+	// Sequential writes.
+	OperationTypeWrite OperationType = "write"
+	// Sequential mixed reads and writes.
+	OperationTypeReadWrite OperationType = "readwrite"
+	// Random reads.
+	OperationTypeRandRead OperationType = "randread"
+	// Random writes.
+	OperationTypeRandWrite OperationType = "randwrite"
+	// Random mixed reads and writes.
+	OperationTypeRandReadWrite OperationType = "randrw"
+)
+
+// The block size in bytes used for I/O units.
+type BlockSize string
+const (
+	BlockSize512 BlockSize = "512"
+	BlockSize1k BlockSize = "1k"
+	BlockSize2k BlockSize = "2k"
+	BlockSize4k BlockSize = "4k"
+	BlockSize8k BlockSize = "8k"
+	BlockSize16k BlockSize = "16k"
+	BlockSize32k BlockSize = "32k"
+	BlockSize64k BlockSize = "64k"
+	BlockSize128k BlockSize = "128k"
+	BlockSize256k BlockSize = "256k"
+	BlockSize512k BlockSize = "512k"
+	BlockSize1m BlockSize = "1m"
+)
+
+// Create the specified number of clones of this job.
+type JobType int
+const (
+	JobType1 JobType = 1
+	JobType4 JobType = 4
+	JobType8 JobType = 8
+	JobType16 JobType = 16
+	JobType32 JobType = 32
+)
+
+// Number of I/O units to keep in flight against the file.
+type DepthType int
+const (
+	DepthType1 DepthType = 1
+	DepthType4 DepthType = 4
+	DepthType8 DepthType = 8
+	DepthType16 DepthType = 16
+	DepthType32 DepthType = 32
+)
+
+type FioOptions struct {
+	OperationType []OperationType
+	BlockSize     []BlockSize
+	JobType       []JobType
+	DepthType     []DepthType
+}
+
+func CountTests(cfg FioOptions) int {
+	return len(cfg.OperationType) * len(cfg.BlockSize) * len(cfg.JobType) * len(cfg.DepthType)
+}
+
+// GenerateFIOConfig generate confiig for FIO from provided params
+// and outputs to file `outPath`.
+// File will be overwriten if it is already exists
+func GenerateFIOConfig(
+	cfg FioOptions,
+	runtime time.Duration,
+	outPath string,
+) error {
+	if len(cfg.OperationType) == 0 {
+		cfg.OperationType = []OperationType{
+			OperationTypeRandRead,
+			OperationTypeRandWrite,
+		}
+	}
+
+	if len(cfg.BlockSize) == 0 {
+		cfg.BlockSize = []BlockSize{
+			BlockSize4k,
+			BlockSize64k,
+			BlockSize1m,
+		}
+	}
+
+	if len(cfg.JobType) == 0 {
+		cfg.JobType = []JobType{
+			JobType1,
+			JobType8,
+		}
+	}
+
+	if len(cfg.DepthType) == 0 {
+		cfg.DepthType = []DepthType{
+			DepthType1,
+			DepthType8,
+			DepthType32,
+		}
+	}
+
+	if (runtime == 0) {
+		runtime = 60 * time.Second
+	}
+	var sTime = fmt.Sprintf("%d", int64(runtime.Round(time.Second).Seconds()))
+
+	var countTests = CountTests(cfg)
+	const ftPath = "/fio.test.file"
+ 	fmt.Fprintln(os.Stderr, "type:", cfg.OperationType)
+	fmt.Fprintln(os.Stderr, "bs:", cfg.BlockSize)
+	fmt.Fprintln(os.Stderr, "jobs:", cfg.JobType)
+	fmt.Fprintln(os.Stderr, "depth:", cfg.DepthType)
+	fmt.Fprintln(os.Stderr, "time:", sTime)
 	fmt.Fprintln(os.Stderr, "Total tests:", countTests)
-	fmt.Fprint(os.Stdout, countTests)
 
 	fd, err := os.Create(outPath)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not create output file [%s]: %w", outPath, err)
 	}
 	defer fd.Close()
 
-	if fTime == "" {
-		fTime = "60"
-	}
-
 	// verify, exists := os.LookupEnv("FIO_CHECKSUMM")
 	// if exists {
-	//	fmt.Fprintf(fd, globalTplcheckSumm, fTime, verify, ftPath)
+	//	fmt.Fprintf(fd, globalTplcheckSumm, sTime, verify, ftPath)
 	//} else {
-	fmt.Fprintf(fd, globalTpl, fTime, ftPath)
+	fmt.Fprintf(fd, globalTpl, sTime, ftPath)
 	//}
 
-	for _, rw := range fType {
-		for _, bs := range fBS {
+	for _, rw := range cfg.OperationType {
+		for _, bs := range cfg.BlockSize {
 			var count = 0
-			for _, depth := range fDepth {
-				for _, job := range fJobs {
+			for _, depth := range cfg.DepthType {
+				for _, job := range cfg.JobType {
 					var section = fmt.Sprintf("%s-%s-%d", rw, bs, count)
 					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job)
 					count++
@@ -211,4 +180,5 @@ func GenerateFIOConfig(fType OpType, fBS BlockSize, fJobs JobsType, fDepth Depth
 		}
 	}
 
+	return nil
 }

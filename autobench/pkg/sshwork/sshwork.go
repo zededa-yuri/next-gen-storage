@@ -5,23 +5,24 @@ import (
 	"os"
 	"io/ioutil"
 	"golang.org/x/crypto/ssh"
-	//kh "golang.org/x/crypto/ssh/knownhosts"
 	"github.com/pkg/sftp"
 )
 
-// SendCommandSSH try to access SSH with timer and sends command
-func SendCommandSSH(conn *ssh.Client, command string, foreground bool) error {
-	session, _ := conn.NewSession()
+// SendCommandSSH sends command
+func SendCommandSSH(sshClient *ssh.Client, command string, foreground bool) error {
+	session, err := sshClient.NewSession()
+	if err != nil {
+		return fmt.Errorf("could not create new ssh session: %w", err)
+	}
+	defer session.Close()
+
 	if foreground {
-		defer session.Close()
 		if err := session.Run(command); err != nil {
-			fmt.Println(err)
-			return err
+			return fmt.Errorf("could not run command [%s]: %w", command, err)
 		}
 	} else {
 		go func() {
-			_ = session.Run(command) //we cannot get answer for this command
-			session.Close()
+			_ = session.Run(command) // we cannot get answer for this command
 		}()
 	}
 
@@ -29,56 +30,65 @@ func SendCommandSSH(conn *ssh.Client, command string, foreground bool) error {
 }
 
 // SendFileSCP send a file over SCP
-func SendFileSCP(conn *ssh.Client, localPath, remotePath string) error {
-	client, err := sftp.NewClient(conn)
+func SendFileSCP(sshClient *ssh.Client, localPath, remotePath string) error {
+	client, err := sftp.NewClient(sshClient)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create new sftp.Client: %w", err)
 	}
 	defer client.Close()
 
-	fmt.Printf("using open\n")
-	rem_f, err := client.OpenFile(remotePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
+	remoteFile, err := client.OpenFile(remotePath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not open remote file [%s] for writing: %w", remotePath, err)
 	}
-	defer rem_f.Close()
+	defer remoteFile.Close()
 
-	loc_f, err := os.Open(localPath)
+	localFile, err := os.Open(localPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not open local file [%s] for reading: %w", localPath, err)
 	}
-	defer loc_f.Close()
+	defer localFile.Close()
 
-	buf, err := ioutil.ReadAll(loc_f)
-	if _, err := rem_f.Write(buf); err != nil {
-		return err
+	buf, err := ioutil.ReadAll(localFile)
+	if err != nil {
+		return fmt.Errorf("could not read from local file: %w", err)
 	}
+
+	if _, err := remoteFile.Write(buf); err != nil {
+		return fmt.Errorf("could not write to remote file: %w", err)
+	}
+
 	return nil
 }
 
 // GetFileSCP get a file over SCP
-func GetFileSCP(conn *ssh.Client, localPath, remotePath string) error {
-	client, err := sftp.NewClient(conn)
+func GetFileSCP(sshClient *ssh.Client, localPath, remotePath string) error {
+	client, err := sftp.NewClient(sshClient)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create new sfpt.Client: %w", err)
 	}
 	defer client.Close()
 
-	rem_f, err := client.Open(remotePath)
+	remoteFile, err := client.Open(remotePath)
 	if err != nil {
-		return fmt.Errorf("Cannot open remote file [%s]: %w", remotePath, err)
+		return fmt.Errorf("could not open remote file [%s] for reading: %w", remotePath, err)
 	}
-	defer rem_f.Close()
+	defer remoteFile.Close()
 
-	loc_f, err := os.OpenFile(localPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
+	localFile, err := os.OpenFile(localPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)
 	if err != nil {
-		return fmt.Errorf("Cannot open local file: %w", err)
+		return fmt.Errorf("could not open local file [%s] for writing: %w", localPath, err)
 	}
-	defer loc_f.Close()
+	defer localFile.Close()
 
-	buf, err := ioutil.ReadAll(rem_f)
-	if _, err := loc_f.Write(buf); err != nil {
-		return err
+	buf, err := ioutil.ReadAll(remoteFile)
+	if err != nil {
+		return fmt.Errorf("could not read from remote file: %w", err)
 	}
+
+	if _, err := localFile.Write(buf); err != nil {
+		return fmt.Errorf("could not write to local file: %w", err)
+	}
+
 	return nil
 }

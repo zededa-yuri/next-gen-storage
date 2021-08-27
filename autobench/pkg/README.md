@@ -17,26 +17,17 @@ This pkg generate config for FIO util
 Use this function to generate:
 
 ```code
-func GenerateFIOConfig(fType OpType, fBS BlockSize, fJobs JobsType, fDepth DepthType, fTime, outPath string)
+func GenerateFIOConfig(fType []OperationType, fBS []BlockSize, fJobs []JobsType, fDepth []DepthType, fTime time.Duration, outPath string)
 ```
 
-PublicType:
-
-```code
-type OpType []string
-type BlockSize []string
-type JobsType []int
-type DepthType []int
-```
-
-## Scpwork pkg
+## SSHwork pkg
 
 The package provides functionality for working with ssh and transferring files via scp
 
 Use this functions for work:
 
 ```code
-func SendCommandSSH(ip *string, port *int, user, password, command string, foreground bool)
-func SendFileSCP(ip *string, port *int, user, password, filename, destpath string)
-func GetFileSCP(ip *string, port *int, user, password, filename, destpath string)
+func SendCommandSSH(conn *ssh.Client, command string, foreground bool)
+func SendFileSCP(conn *ssh.Client, localPath, remotePath string)
+func GetFileSCP(conn *ssh.Client, localPath, remotePath string)
 ```
