@@ -5,98 +5,24 @@ import (
 	"log"
 	"os"
 	"fmt"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/sshwork"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/fioconv"
 	//	"bytes"
-	"path/filepath"
+	// "path/filepath"
 
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
-	"github.com/jessevdk/go-flags"
-	"github.com/pkg/sftp"
+	// "github.com/pkg/sftp"
 	//	"io"
 	//	"bufio"
 
 )
 
-type Options struct {
-	Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
-}
 
-var opts Options
-var parser = flags.NewParser(&opts, flags.Default)
+func run(ip, user string) {
 
-func argparse() {
-	fmt.Printf("parsing arguments\n")
-	if _, err := parser.Parse(); err != nil {
-		switch flagsErr := err.(type) {
-		case flags.ErrorType:
-			if flagsErr == flags.ErrHelp {
-				os.Exit(0)
-			}
-			os.Exit(1)
-		default:
-			os.Exit(1)
-		}
-	}
-
-	fmt.Printf("Verbosity: %v\n", opts.Verbose)
-}
-
-
-func upload_files(conn *ssh.Client) {
-	client, err := sftp.NewClient(conn)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Close()
-
-	fmt.Printf("using open\n")
-	f, err := client.OpenFile("hello3.txt", os.O_CREATE|os.O_TRUNC|os.O_WRONLY)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	src_f, err := os.Open("tests/storage-bench/run.sh")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer src_f.Close()
-
-	// var data_source io.Reader
-	// data_source = src_f
-
-	// data_source := bufio.NewReader(src_f)
-
-	// This is supposed to be faster, but it is terribly slow.. No idea why
-	// type writerOnly struct{ io.Writer }
-	// bw := bufio.NewWriter(writerOnly{f}) // no ReadFrom()
-	// ret, err := bw.ReadFrom(src_f)
-	// //	ret, err := f.ReadFrom(src_f)
-
-
-	buf, err := ioutil.ReadAll(src_f)
-	if _, err := f.Write(buf); err != nil {
-		log.Fatal(err)
-	}
-
-	f.Close()
-}
-
-func main() {
-	// var hostKey ssh.PublicKey
-	// A public key may be used to authenticate against the remote
-	// server by using an unencrypted PEM-encoded private key file.
-	//
-	// If you have an encrypted private key, the crypto/x509 package
-	// can be used to decrypt it.
-
-	argparse()
-
-	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(dir)
-
+	//*
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
 
@@ -119,7 +45,7 @@ func main() {
 	}
 
 	config := &ssh.ClientConfig{
-		User: "yuri",
+		User: user,
 		Auth: []ssh.AuthMethod{
 			// Use the PublicKeys method for remote authentication.
 			ssh.PublicKeys(signer),
@@ -128,22 +54,53 @@ func main() {
 	}
 
 	// Connect to the remote server and perform the SSH handshake.
-	client, err := ssh.Dial("tcp", "147.75.80.25:22", config)
+	client, err := ssh.Dial("tcp", ip, config)
 	if err != nil {
 		log.Fatalf("unable to connect: %v", err)
 	}
 	defer client.Close()
-	
-	// ss, err := client.NewSession()
-	// if err != nil {
-	// 	log.Fatal("unable to create SSH session: ", err)
-	// }
-	// defer ss.Close()
 
-	// var stdoutBuf bytes.Buffer
-	// ss.Stdout = &stdoutBuf
-	// ss.Run("uname -a")
-	// log.Printf("--output:\n%s\n", stdoutBuf)
+	mkconfig.GenerateFIOConfig(
+		mkconfig.OpType{"read", "write"},
+		mkconfig.BlockSize{"4k", "64k", "1m"},
+		mkconfig.JobsType{1, 8},
+		mkconfig.DepthType{1, 8, 32},
+		"60",
+		"fio_config.cfg",
+	)
 
-	upload_files(client)
+	if err := sshwork.SendFileSCP(
+		client,
+		"/Users/vk_en/Documents/src/next-gen-storage/autobench/fio_config.cfg",
+		"/users/vit/fio_config.cfg",
+	); err != nil {
+		fmt.Println(err)
+	}
+
+	if err := sshwork.SendCommandSSH(
+		client,
+		"mkdir /users/vit/HELLO",
+		true,
+	); err != nil {
+		fmt.Println(err)
+	}
+
+
+	if err := sshwork.GetFileSCP(
+		client,
+		"/Users/vk_en/Documents/src/next-gen-storage/autobench/fio_config.cfg-test1",
+		"/users/vit/fio_config.cfg",
+	); err != nil {
+		fmt.Println(err)
+	}
+
+	fioconv.ConvertJSONtoCSV(
+		"/Users/vk_en/Documents/src/next-gen-storage/autobench/result.json",
+		"/Users/vk_en/Documents/src/next-gen-storage/autobench/fio_res.csv",
+	)
+}
+
+
+func main() {
+	run("145.40.93.205:22", "vit")
 }

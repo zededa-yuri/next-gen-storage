@@ -2,7 +2,6 @@ package mkconfig
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
