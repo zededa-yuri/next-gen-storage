@@ -27,9 +27,9 @@ func containsInt(hs []int, val int) bool {
 	return false
 }
 
-type tType []string
+type OpType []string
 
-func (t *tType) Set(v string) error {
+func (t *OpType) Set(v string) error {
 	if strings.TrimSpace(v) == "" {
 		return nil
 	}
@@ -47,13 +47,13 @@ func (t *tType) Set(v string) error {
 	return nil
 }
 
-func (t tType) String() string {
+func (t OpType) String() string {
 	return strings.Join(t, ",")
 }
 
-type blockSize []string
+type BlockSize []string
 
-func (bs *blockSize) Set(v string) error {
+func (bs *BlockSize) Set(v string) error {
 	if strings.TrimSpace(v) == "" {
 		return nil
 	}
@@ -71,13 +71,13 @@ func (bs *blockSize) Set(v string) error {
 	return nil
 }
 
-func (bs blockSize) String() string {
+func (bs BlockSize) String() string {
 	return strings.Join(bs, ",")
 }
 
-type jobs []int
+type JobsType []int
 
-func (j *jobs) Set(v string) error {
+func (j *JobsType) Set(v string) error {
 	if strings.TrimSpace(v) == "" {
 		return nil
 	}
@@ -96,7 +96,7 @@ func (j *jobs) Set(v string) error {
 	return nil
 }
 
-func (j jobs) String() string {
+func (j JobsType) String() string {
 	var sVal []string
 	for _, n := range j {
 		sVal = append(sVal, strconv.Itoa(n))
@@ -104,9 +104,9 @@ func (j jobs) String() string {
 	return strings.Join(sVal, ",")
 }
 
-type depth []int
+type DepthType []int
 
-func (d *depth) Set(v string) error {
+func (d *DepthType) Set(v string) error {
 	if strings.TrimSpace(v) == "" {
 		return nil
 	}
@@ -125,7 +125,7 @@ func (d *depth) Set(v string) error {
 	return nil
 }
 
-func (d depth) String() string {
+func (d DepthType) String() string {
 	var sVal []string
 	for _, n := range d {
 		sVal = append(sVal, strconv.Itoa(n))
@@ -133,22 +133,12 @@ func (d depth) String() string {
 	return strings.Join(sVal, ",")
 }
 
-var fType = tType{"read", "write"}
-var fBS = blockSize{"4k", "64k", "1m"}
-var fJobs = jobs{1, 8}
-var fDepth = depth{1, 8, 32}
+/* var fType = OpType{"read", "write"}
+var fBS = BlockSize{"4k", "64k", "1m"}
+var fJobs = JobsType{1, 8}
+var fDepth = DepthType{1, 8, 32}
 var fTime string
-var outPath string
-
-func init() {
-	flag.Var(&fType, "type", "Use comma separated string with combinations of read, write, randread, randwrite ...")
-	flag.Var(&fBS, "bs", "Use comma separated string with combinations of 4k,8k,16k,64k ...")
-	flag.Var(&fJobs, "jobs", "Use comma separated string with combinations of int values")
-	flag.Var(&fDepth, "depth", "Use comma separated string with combinations of int values")
-	flag.StringVar(&fTime, "time", "60", "Use seconds to pass execution time")
-	flag.StringVar(&outPath, "out", "./config.fio", "Change output file path")
-	flag.Parse()
-}
+var outPath string */
 
 const globalTpl = `[global]
 ioengine=libaio
@@ -181,11 +171,10 @@ numjobs=%d
 stonewall
 `
 
-func main() {
+func GenerateFIOConfig(fType OpType, fBS BlockSize, fJobs JobsType, fDepth DepthType, fTime, outPath string) {
 	var countTests = len(fType) * len(fBS) * len(fDepth) * len(fJobs)
 	var ftPath = "/fio.test.file"
-
-	fmt.Fprintln(os.Stderr, "type:", fType)
+ 	fmt.Fprintln(os.Stderr, "type:", fType)
 	fmt.Fprintln(os.Stderr, "bs:", fBS)
 	fmt.Fprintln(os.Stderr, "jobs:", fJobs)
 	fmt.Fprintln(os.Stderr, "depth:", fDepth)
@@ -203,12 +192,12 @@ func main() {
 		fTime = "60"
 	}
 
-	verify, exists := os.LookupEnv("FIO_CHECKSUMM")
-	if exists {
-		fmt.Fprintf(fd, globalTplcheckSumm, fTime, verify, ftPath)
-	} else {
-		fmt.Fprintf(fd, globalTpl, fTime, ftPath)
-	}
+	// verify, exists := os.LookupEnv("FIO_CHECKSUMM")
+	// if exists {
+	//	fmt.Fprintf(fd, globalTplcheckSumm, fTime, verify, ftPath)
+	//} else {
+	fmt.Fprintf(fd, globalTpl, fTime, ftPath)
+	//}
 
 	for _, rw := range fType {
 		for _, bs := range fBS {

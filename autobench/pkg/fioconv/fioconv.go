@@ -133,12 +133,7 @@ func cleanJSON(in []byte) ([]byte, error) {
 	return in[begin:end], nil
 }
 
-func main() {
-	if len(os.Args) < 2 {
-		panic("not enough arguments")
-	}
-	var inputFile = os.Args[1]
-	var outputFile = os.Args[2]
+func ConvertJSONtoCSV(inputFile, outputFile string) {
 	data, err := ioutil.ReadFile(inputFile)
 	if err != nil {
 		panic(err)
