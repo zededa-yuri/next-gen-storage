@@ -133,28 +133,30 @@ func cleanJSON(in []byte) ([]byte, error) {
 	return in[begin:end], nil
 }
 
-func ConvertJSONtoCSV(inputFile, outputFile string) {
-	data, err := ioutil.ReadFile(inputFile)
+func ConvertJSONtoCSV(inputPath, outputPath string) error {
+	data, err := ioutil.ReadFile(inputPath)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not read file [%s]: %w", inputPath, err)
 	}
 
 	text, err := cleanJSON(data)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not clean JSON: %w", err)
 	}
 	obj, err := parseJSON(text)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not parse JSON: %w", err)
 	}
 
-	fd, err := os.Create(outputFile)
+	fd, err := os.Create(outputPath)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("could not create CSV file [%s]: %w", outputPath, err)
 	}
 	defer fd.Close()
 
 	if err := formatCSV(obj, fd); err != nil {
-		panic(err)
+		return fmt.Errorf("could not format CSV: %w", err)
 	}
+
+	return nil
 }
