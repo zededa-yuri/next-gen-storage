@@ -1,4 +1,4 @@
-package main
+package mkconfig
 
 import (
 	"errors"
@@ -183,12 +183,7 @@ stonewall
 
 func main() {
 	var countTests = len(fType) * len(fBS) * len(fDepth) * len(fJobs)
-	var ftPath = "/data/fio.test.file"
-
-	path, exists := os.LookupEnv("FOLDER_GIT")
-	if exists {
-		ftPath = fmt.Sprintf("/data/%s/fio.test.file", path)
-	}
+	var ftPath = "/fio.test.file"
 
 	fmt.Fprintln(os.Stderr, "type:", fType)
 	fmt.Fprintln(os.Stderr, "bs:", fBS)
