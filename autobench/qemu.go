@@ -144,16 +144,15 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
 	template_args := mainTemplateArgs{"bar"}
 
-	fmt.Printf("selfpath is %s\n", get_self_path())
-	qemu_main_config_path := "qemu.cfg"
-	err := write_main_config(qemu_main_config_path, template_args)
+	qemuConfigDir := filepath.Join(get_self_path(), "configs/qemu.cfg")
+	err := write_main_config(qemuConfigDir, template_args)
 	if err != nil {
 		return
 	}
 
 	cmd := exec.CommandContext(ctx,
 		"qemu-system-x86_64",
-		"-readconfig",  qemu_main_config_path,
+		"-readconfig",  qemuConfigDir,
 		"-display", "none",
 		"-device", "e1000,netdev=net0",  "-netdev",  "user,id=net0,hostfwd=tcp::6666-:22",
 		"-serial", "chardev:ch0")
@@ -178,7 +177,6 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		fmt.Printf("command returned:\n%s\n", out)
 		cancel()
 	}
-
 }
 
 func runBenchmark() error {
