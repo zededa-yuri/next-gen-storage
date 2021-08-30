@@ -32,7 +32,7 @@ func SendFileSCP(conn *ssh.Client, localPath, remotePath string)
 func GetFileSCP(conn *ssh.Client, localPath, remotePath string)
 ```
 
-## Autobench
+## Fiotests
 
 The package provides functionality for running FIO tests via ssh client
 

@@ -1,4 +1,4 @@
-package autobench
+package fiotests
 
 import (
 	"io/ioutil"
@@ -85,7 +85,6 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 
 	// Create config for fio
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-
 	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig)
 
 	// Create folder on VM
@@ -118,11 +117,11 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 	}
 	// Waiting end fio test
 	var countTests = mkconfig.CountTests(fioOptions)
-	const bufferTime = 1 * time.Minute
+	const bufferTime = 2 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
 
 	timerTomeOut := time.After(totalTime)
-	ticker := time.NewTicker(2 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
 	there:
