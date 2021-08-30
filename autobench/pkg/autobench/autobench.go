@@ -33,7 +33,7 @@ func SshConnect(ip, user string) (*ssh.Client, error) {
 	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
 	hostKeyCallback, err := kh.New(known_hosts_path)
 	if err != nil {
-		return nil, fmt.Errorf("could not create hostkeycallback function: ", err)
+		return nil, fmt.Errorf("could not create hostkeycallback function: %w", err)
 	}
 
 	config := &ssh.ClientConfig{
