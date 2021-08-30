@@ -1,6 +1,6 @@
-package main
+package qemutmp
 
-const qemuConfTemplate = `
+const QemuConfTemplate = `
 [drive "hd"]
   if = "none"
   file = "bionic-server-cloudimg-i386.img"
