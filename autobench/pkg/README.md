@@ -31,3 +31,13 @@ func SendCommandSSH(conn *ssh.Client, command string, foreground bool)
 func SendFileSCP(conn *ssh.Client, localPath, remotePath string)
 func GetFileSCP(conn *ssh.Client, localPath, remotePath string)
 ```
+
+## Autobench
+
+The package provides functionality for running FIO tests via ssh client
+
+Use this functions for work:
+
+```code
+func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration)
+```
