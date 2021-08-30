@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"context"
 	"time"
-	"flag"
+	//"flag"
 	"text/template"
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
@@ -26,7 +26,7 @@ type QemuCommand struct {
 }
 
 var qemu_command QemuCommand
-var arg1 string
+/* var arg1 string
 var arg2 string
 var arg3 string
 var arg4 string
@@ -41,7 +41,7 @@ func init() {
 	flag.StringVar(&arg5, "varible", "default value", "Description ...")
 	flag.StringVar(&arg6, "varible", "default value", "Description ...")
 	flag.Parse()
-}
+} */
 
 type mainTemplateArgs struct {
 	foo string
