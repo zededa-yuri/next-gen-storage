@@ -52,7 +52,7 @@ func SshConnect(ip, user string) (*ssh.Client, error) {
 	return client, nil
 }
 
-func run(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
+func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
 	// Get ssh client
 	client, err := SshConnect(sshHost, sshUser)
 	if err != nil {
@@ -169,28 +169,6 @@ func run(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOption
 
 /*
 func main() {
-	var fioOptions = mkconfig.FioOptions{
-		OperationType: []mkconfig.OperationType{
-			mkconfig.OperationTypeRead,
-			mkconfig.OperationTypeWrite,
-		},
-		BlockSize: []mkconfig.BlockSize{
-			mkconfig.BlockSize4k,
-			mkconfig.BlockSize64k,
-			mkconfig.BlockSize1m,
-		},
-		JobType: []mkconfig.JobType{
-			mkconfig.JobType1,
-			mkconfig.JobType8,
-		},
-		DepthType: []mkconfig.DepthType{
-			mkconfig.DepthType1,
-			mkconfig.DepthType8,
-			mkconfig.DepthType32,
-		},
-	}
-	if err := run("145.40.93.205:22", "vit", "ResultsTest", fioOptions, 5 * time.Second); err != nil {
-		log.Fatal(err)
-	}
+
 }
  */

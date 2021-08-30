@@ -9,10 +9,13 @@ import (
 	"path/filepath"
 	"os/exec"
 	"context"
+	"time"
+	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"text/template"
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
-	"time"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/autobench"
 )
 
 
@@ -28,7 +31,7 @@ type mainTemplateArgs struct {
 }
 
 func write_main_config(path string, template_args mainTemplateArgs) error {
-	t, err := template.New("qemu").Parse(qemuConfTemplate)
+	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
 
 	config_f, err := os.OpenFile(path,
 		os.O_RDWR | os.O_CREATE | os.O_TRUNC,
@@ -169,6 +172,35 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
 }
 
+func runBenchmark() error {
+	var fioOptions = mkconfig.FioOptions{
+		OperationType: []mkconfig.OperationType{
+			mkconfig.OperationTypeRead,
+			mkconfig.OperationTypeWrite,
+		},
+		BlockSize: []mkconfig.BlockSize{
+			mkconfig.BlockSize4k,
+			mkconfig.BlockSize64k,
+			mkconfig.BlockSize1m,
+		},
+		JobType: []mkconfig.JobType{
+			mkconfig.JobType1,
+			mkconfig.JobType8,
+		},
+		DepthType: []mkconfig.DepthType{
+			mkconfig.DepthType1,
+			mkconfig.DepthType8,
+			mkconfig.DepthType32,
+		},
+	}
+	if err := autobench.RunFIOTest("145.40.93.205:22", "vit", "ResultsTest", fioOptions, 5 * time.Second); err != nil {
+		log.Fatal(err)
+	}
+
+	return nil
+}
+
+
 func (x *QemuCommand) Execute(args []string) error {
 	return nil
 	ctx := context.Background()
@@ -192,8 +224,12 @@ func (x *QemuCommand) Execute(args []string) error {
 func init() {
 	fmt.Printf("--- %v\n", qemu_command.Gdb)
 
-	parser.AddCommand("qemu",
+/* 	parser.AddCommand("qemu",
 		"Run benchmark in qemu",
 		"Long description",
-		&qemu_command)
+		&qemu_command) */
+}
+
+func main(){
+
 }
