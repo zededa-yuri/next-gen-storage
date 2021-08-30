@@ -10,10 +10,11 @@ import (
 	"os/exec"
 	"context"
 	"time"
-	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
+	"flag"
 	"text/template"
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
+	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/autobench"
 )
@@ -25,6 +26,22 @@ type QemuCommand struct {
 }
 
 var qemu_command QemuCommand
+var arg1 string
+var arg2 string
+var arg3 string
+var arg4 string
+var arg5 string
+var arg6 string
+
+func init() {
+	flag.StringVar(&arg1, "varible", "default value", "Description ...")
+	flag.StringVar(&arg2, "varible", "default value", "Description ...")
+	flag.StringVar(&arg3, "varible", "default value", "Description ...")
+	flag.StringVar(&arg4, "varible", "default value", "Description ...")
+	flag.StringVar(&arg5, "varible", "default value", "Description ...")
+	flag.StringVar(&arg6, "varible", "default value", "Description ...")
+	flag.Parse()
+}
 
 type mainTemplateArgs struct {
 	foo string
@@ -72,8 +89,6 @@ func (connection SshConnection) Init(ctx context.Context) error {
 		log.Fatalf("unable to parse private key: %v", err)
 	}
 
-	signer = signer
-
 	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
 	hostKeyCallback, err := kh.New(known_hosts_path)
 	if err != nil {
@@ -116,12 +131,6 @@ func (connection SshConnection) Init(ctx context.Context) error {
 
 	return nil
 }
-
-// func (connection SshConnection) Upload(ctx context.Context, path string) error {
-// 	session := connection.client.NewSession()
-// 	defer session.Close()
-
-// }
 
 func get_self_path() (string) {
 	ex, err := os.Executable()
@@ -201,8 +210,7 @@ func runBenchmark() error {
 }
 
 
-func (x *QemuCommand) Execute(args []string) error {
-	return nil
+func main() {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
 
@@ -217,19 +225,4 @@ func (x *QemuCommand) Execute(args []string) error {
 	var connection SshConnection
 	connection.Init(ctx)
 	fmt.Printf("connection established\n")
-
-	return nil
-}
-
-func init() {
-	fmt.Printf("--- %v\n", qemu_command.Gdb)
-
-/* 	parser.AddCommand("qemu",
-		"Run benchmark in qemu",
-		"Long description",
-		&qemu_command) */
-}
-
-func main(){
-
 }
