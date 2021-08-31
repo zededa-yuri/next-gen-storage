@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 	"os"
+	"path/filepath"
 )
 
 const globalTpl = `[global]
@@ -99,6 +100,35 @@ type FioOptions struct {
 }
 
 func CountTests(cfg FioOptions) int {
+	if len(cfg.OperationType) == 0 {
+		cfg.OperationType = []OperationType{
+			OperationTypeRead,
+			OperationTypeWrite,
+		}
+	}
+
+	if len(cfg.BlockSize) == 0 {
+		cfg.BlockSize = []BlockSize{
+			BlockSize4k,
+			BlockSize64k,
+			BlockSize1m,
+		}
+	}
+
+	if len(cfg.JobType) == 0 {
+		cfg.JobType = []JobType{
+			JobType1,
+			JobType8,
+		}
+	}
+
+	if len(cfg.DepthType) == 0 {
+		cfg.DepthType = []DepthType{
+			DepthType1,
+			DepthType8,
+			DepthType32,
+		}
+	}
 	return len(cfg.OperationType) * len(cfg.BlockSize) * len(cfg.JobType) * len(cfg.DepthType)
 }
 
@@ -108,12 +138,12 @@ func CountTests(cfg FioOptions) int {
 func GenerateFIOConfig(
 	cfg FioOptions,
 	runtime time.Duration,
-	outPath string,
+	outPath, sshUser string,
 ) error {
 	if len(cfg.OperationType) == 0 {
 		cfg.OperationType = []OperationType{
-			OperationTypeRandRead,
-			OperationTypeRandWrite,
+			OperationTypeRead,
+			OperationTypeWrite,
 		}
 	}
 
@@ -146,7 +176,7 @@ func GenerateFIOConfig(
 	var sTime = fmt.Sprintf("%d", int64(runtime.Round(time.Second).Seconds()))
 
 	var countTests = CountTests(cfg)
-	const ftPath = "/fio.test.file"
+	ftPath := filepath.Join("/users/", sshUser, "/fio.test.file")
  	fmt.Fprintln(os.Stderr, "type:", cfg.OperationType)
 	fmt.Fprintln(os.Stderr, "bs:", cfg.BlockSize)
 	fmt.Fprintln(os.Stderr, "jobs:", cfg.JobType)

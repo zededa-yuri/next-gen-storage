@@ -93,7 +93,7 @@ func (connection SshConnection) Init(ctx context.Context) error {
 			break
 		}
 		log.Printf("sleeping 1 sec\n")
-		time.Sleep(time.Second)
+		time.Sleep(5 * time.Second)
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			return ctx.Err()
 		}
@@ -179,7 +179,7 @@ func (x *QemuCommand) Execute(args []string) error {
 
 func init() {
 	parser.AddCommand("qemu",
-		"Run benchmark in qemu",
-		"Long description",
+		"Create and run VM in QEMU",
+		"This command creates and starts a virtual machine in QEMU",
 		&qemu_command)
 }

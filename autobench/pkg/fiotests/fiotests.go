@@ -66,7 +66,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 		"apt-get update && apt-get install -y fio git lshw sysstat",
 		true, // sshwork.Foreground - true | sshwork.Background - false
 	); err != nil {
-		return fmt.Errorf("couldnot install tools on VM(maybe we need sudo): %w", err)
+		//return fmt.Errorf("couldnot install tools on VM(maybe we need sudo): %w", err)
 	}
 
 	ex, err := os.Executable()
@@ -85,7 +85,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 
 	// Create config for fio
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig)
+	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser)
 
 	// Create folder on VM
 	remoteResultsAbsDir := filepath.Join("/users/", sshUser, "/FIO")
@@ -105,22 +105,23 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 		return fmt.Errorf("could not send file to VM: %w", err)
 	}
 
-	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
-	fioRunCmd := fmt.Sprintf(
-		`fio %s --output-format=normal,json > %s &`,
-		filepath.Join(remoteResultsAbsDir, "/fio_config.cfg"),
-		filepath.Join(remoteResultsAbsDir, "/result.json"),
-	)
-
-	if err := sshwork.SendCommandSSH(client, fioRunCmd, false); err != nil {
-		return fmt.Errorf("FIO test failed (maybe we need sudo): %w", err)
-	}
 	// Waiting end fio test
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 2 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
+	fmt.Println("Total waiting time before the end of the test:", totalTime)
+	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
+	fioRunCmd := fmt.Sprintf(
+		"fio %s --output-format=normal,json > %s & ",
+		filepath.Join(remoteResultsAbsDir, "/fio_config.cfg"),
+		filepath.Join(remoteResultsAbsDir, "/result.json"),
+	)
 
-	timerTomeOut := time.After(totalTime)
+	if err := sshwork.SendCommandSSH(client, fioRunCmd, true); err != nil {
+		return fmt.Errorf("FIO test failed (maybe we need sudo): %w", err)
+	}
+
+/* 	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -137,7 +138,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit.")
 		}
 	}
-
+ */
 	// Download fio reults
 	if err := sshwork.GetFileSCP(
 		client,
@@ -163,11 +164,6 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 		return fmt.Errorf("could not convert JSON to CSV: %w", err)
 	}
 
+	fmt.Println("Tests finished!")
 	return nil
 }
-
-/*
-func main() {
-
-}
- */
