@@ -17,7 +17,7 @@ This pkg generate config for FIO util
 Use this function to generate:
 
 ```code
-func GenerateFIOConfig(fType []OperationType, fBS []BlockSize, fJobs []JobsType, fDepth []DepthType, fTime time.Duration, outPath string)
+func GenerateFIOConfig(fType []OperationType, fBS []BlockSize, fJobs []JobsType, fDepth []DepthType, fTime time.Duration, outPath, SshUser string)
 ```
 
 ## SSHwork pkg
