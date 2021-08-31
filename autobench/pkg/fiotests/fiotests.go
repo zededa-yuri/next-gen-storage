@@ -66,6 +66,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 		"apt-get update && apt-get install -y fio git lshw sysstat",
 		true, // sshwork.Foreground - true | sshwork.Background - false
 	); err != nil {
+		// Not critical
 		//return fmt.Errorf("couldnot install tools on VM(maybe we need sudo): %w", err)
 	}
 
@@ -110,6 +111,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 	const bufferTime = 2 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
 	fmt.Println("Total waiting time before the end of the test:", totalTime)
+
 	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
 	fioRunCmd := fmt.Sprintf(
 		"fio %s --output-format=normal,json > %s & ",
@@ -117,11 +119,14 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	)
 
-	if err := sshwork.SendCommandSSH(client, fioRunCmd, true); err != nil {
-		return fmt.Errorf("FIO test failed (maybe we need sudo): %w", err)
-	}
+	go func() {
+		if err := sshwork.SendCommandSSH(client, fioRunCmd, true); err != nil {
+			fmt.Println("FIO test failed (maybe we need sudo): %w", err)
+		}
+	}()
 
-/* 	timerTomeOut := time.After(totalTime)
+	// Heartbeat
+	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
@@ -138,8 +143,9 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit.")
 		}
 	}
- */
+
 	// Download fio reults
+	fmt.Println("Downloading the results ...")
 	if err := sshwork.GetFileSCP(
 		client,
 		filepath.Join(localResultsAbsDir, "/result.json"),
