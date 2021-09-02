@@ -81,7 +81,10 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	fmt.Println("exPath:", exPath)
 
 	// Create folder for results
-	localResultsAbsDir := filepath.Join(exPath, localResultsFolder + curentDate)
+	localResultsAbsDir := localDirResults
+	if localResultsAbsDir == "" {
+		localResultsAbsDir = filepath.Join(exPath, localResultsFolder + curentDate)
+	}
 	err = os.Mkdir(localResultsAbsDir, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create local dir for result: %w", err)

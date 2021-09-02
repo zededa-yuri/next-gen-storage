@@ -40,7 +40,7 @@ numjobs=%d
 stonewall
 `
 
-func contains(hs []string, val string) bool {
+func Contains(hs []string, val string) bool {
 	for _, v := range hs {
 		if v == val {
 			return true
@@ -70,7 +70,7 @@ func (t *OpType) Set(v string) error {
 
 	var valid = []string{"read", "write", "randread", "randwrite", "readwrite", "randrw", "rw", "trim", "randtrim"}
 	for _, s := range val {
-		if !contains(valid, s) {
+		if !Contains(valid, s) {
 			return fmt.Errorf("Invalid value for operation type: %s\n\tUse something from this list: %v\n", s, valid)
 		}
 		*t = append(*t, s)
@@ -90,7 +90,7 @@ func (bs *BSType) Set(v string) error {
 	var valid = []string{"512", "1k", "2k", "4k", "8k", "16k", "32k", "64k", "128k", "256k", "512k", "1m"}
 	*bs = []string{}
 	for _, s := range val {
-		if !contains(valid, s) {
+		if !Contains(valid, s) {
 			return fmt.Errorf("Invalid value for block size: %s\n\tUse something from this list: %v\n", s, valid)
 		}
 		*bs = append(*bs, s)
@@ -145,6 +145,7 @@ type FioOptions struct {
 	BlockSize   BSType
 	Jobs      	JobsType
 	Iodepth     DepthType
+	CheckSumm	string
 }
 
 func CountTests(cfg FioOptions) int {
@@ -214,12 +215,11 @@ func GenerateFIOConfig(
 	}
 	defer fd.Close()
 
-	// verify, exists := os.LookupEnv("FIO_CHECKSUMM")
-	// if exists {
-	//	fmt.Fprintf(fd, globalTplcheckSumm, sTime, verify, ftPath)
-	//} else {
-	fmt.Fprintf(fd, globalTpl, sTime, ftPath)
-	//}
+	if cfg.CheckSumm != "" {
+		fmt.Fprintf(fd, globalTplcheckSumm, sTime, cfg.CheckSumm, ftPath)
+	} else {
+		fmt.Fprintf(fd, globalTpl, sTime, ftPath)
+	}
 
 	for _, rw := range cfg.Operations {
 		for _, bs := range cfg.BlockSize {
