@@ -1,12 +1,13 @@
 package main
 
 import (
-	"os"
 	"fmt"
+	"os"
 	"time"
+
 	"github.com/jessevdk/go-flags"
-	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/fiotests"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 )
 
 
@@ -29,6 +30,7 @@ type FioParametrs struct {
 	OpType string				`short:"o" long:"optype" description:"Operation types I/O for fio config" long-description:"Use comma separated string with combinations of read, write, randread, randwrite ..." default:"read,write"`
 	BlockSize string 			`short:"b" long:"bs" description:"Block size for fio config"  default:"4k,64k,1m"`
 	Iodepth string 				`short:"d" long:"iodepth" description:"Iodepth for fio config" default:"8,16,32"`
+	CheckSumm string			`short:"c" long:"check" description:"Data integrity check. Can be one of the following values: (md5, crc64, crc32c, crc32c-intel, crc32, crc16, crc7, xxhash, sha512, sha256, sha1, ..., meta)"`
 	Jobs string					`short:"j" long:"jobs" description:"Jobs for fio config" default:"1,8"`
 	TargetFIODevice string 		`short:"T" long:"target" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
 	LocalFolderResults string 	`short:"f" long:"folder" description:"[Optional] A name of folder with tests results" default:"FIOTestsResults"`
@@ -79,6 +81,14 @@ func (x *FioParametrs) Execute(args []string) error {
 
 	if err = fiotests.RunFIOTest(fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second); err != nil {
 		return fmt.Errorf("FIO tests failed: %v", err)
+	}
+
+	if fioCmd.CheckSumm != "" {
+		var valid = []string{"md5", "crc64", "crc32c", "crc32c-intel", "crc32", "crc16", "crc7", "xxhash", "sha512", "sha256", "sha1", "meta"}
+		if mkconfig.Contains(valid, fioCmd.CheckSumm) {
+			return fmt.Errorf("Invalid value for check summ")
+		}
+		fioOptions.CheckSumm = fioCmd.CheckSumm
 	}
 
 	return nil
