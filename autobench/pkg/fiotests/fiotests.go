@@ -52,7 +52,8 @@ func SshConnect(ip, user string) (*ssh.Client, error) {
 	return client, nil
 }
 
-func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
+func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
+	curentDate := fmt.Sprintf(time.Now().Format("2006-01-02-15:04:05"))
 	// Get ssh client
 	client, err := SshConnect(sshHost, sshUser)
 	if err != nil {
@@ -78,7 +79,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 	fmt.Println("exPath:", exPath)
 
 	// Create folder for results
-	localResultsAbsDir := filepath.Join(exPath, localResultsDir)
+	localResultsAbsDir := filepath.Join(exPath, localResultsFolder + curentDate)
 	err = os.Mkdir(localResultsAbsDir, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create local dir for result: %w", err)
@@ -86,10 +87,10 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 
 	// Create config for fio
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser)
+	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser, targetDevice)
 
-	// Create folder on VM
-	remoteResultsAbsDir := filepath.Join("/users/", sshUser, "/FIO")
+	// Create folder on VM  FIXME
+	remoteResultsAbsDir := filepath.Join("/users/", sshUser, "/FIO" + curentDate)
 	if err := sshwork.SendCommandSSH(
 		client,
 		fmt.Sprintf("mkdir %s", remoteResultsAbsDir),
@@ -137,7 +138,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 			ticker.Stop()
 			break there
 		case <- ticker.C:
-			if err := sshwork.SendCommandSSH(client, "true", true); err != nil {
+			if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
 				return fmt.Errorf("VM is fail. Test failed")
 			}
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit.")
@@ -157,7 +158,7 @@ func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.Fi
 	// Download dmesg reults
 	if err := sshwork.GetFileSCP(
 		client,
-		filepath.Join(localResultsAbsDir, "/dmesg"),
+		filepath.Join(localResultsAbsDir, "/guest_dmesg"),
 		"/var/log/dmesg",
 	); err != nil {
 		return fmt.Errorf("could not get dmesg file from VM: %w", err)
