@@ -2,9 +2,11 @@ package mkconfig
 
 import (
 	"fmt"
-	"time"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const globalTpl = `[global]
@@ -38,98 +40,130 @@ numjobs=%d
 stonewall
 `
 
-// Type of I/O pattern.
-type OperationType string
-const (
-	// Sequential reads.
-	OperationTypeRead OperationType = "read"
-	// Sequential writes.
-	OperationTypeWrite OperationType = "write"
-	// Sequential mixed reads and writes.
-	OperationTypeReadWrite OperationType = "readwrite"
-	// Random reads.
-	OperationTypeRandRead OperationType = "randread"
-	// Random writes.
-	OperationTypeRandWrite OperationType = "randwrite"
-	// Random mixed reads and writes.
-	OperationTypeRandReadWrite OperationType = "randrw"
-)
+func contains(hs []string, val string) bool {
+	for _, v := range hs {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
 
-// The block size in bytes used for I/O units.
-type BlockSize string
-const (
-	BlockSize512 BlockSize = "512"
-	BlockSize1k BlockSize = "1k"
-	BlockSize2k BlockSize = "2k"
-	BlockSize4k BlockSize = "4k"
-	BlockSize8k BlockSize = "8k"
-	BlockSize16k BlockSize = "16k"
-	BlockSize32k BlockSize = "32k"
-	BlockSize64k BlockSize = "64k"
-	BlockSize128k BlockSize = "128k"
-	BlockSize256k BlockSize = "256k"
-	BlockSize512k BlockSize = "512k"
-	BlockSize1m BlockSize = "1m"
-)
+func containsInt(hs []int, val int) bool {
+	for _, v := range hs {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
 
-// Create the specified number of clones of this job.
-type JobType int
-const (
-	JobType1 JobType = 1
-	JobType4 JobType = 4
-	JobType8 JobType = 8
-	JobType16 JobType = 16
-	JobType32 JobType = 32
-)
+type OpType []string
 
-// Number of I/O units to keep in flight against the file.
-type DepthType int
-const (
-	DepthType1 DepthType = 1
-	DepthType4 DepthType = 4
-	DepthType8 DepthType = 8
-	DepthType16 DepthType = 16
-	DepthType32 DepthType = 32
-)
+func (t *OpType) Set(v string) error {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	v = strings.ToLower(v)
+	var val = strings.Split(v, ",")
+	*t = []string{}
 
+	var valid = []string{"read", "write", "randread", "randwrite", "readwrite", "randrw", "rw", "trim", "randtrim"}
+	for _, s := range val {
+		if !contains(valid, s) {
+			return fmt.Errorf("Invalid value for operation type: %s\n\tUse something from this list: %v\n", s, valid)
+		}
+		*t = append(*t, s)
+	}
+
+	return nil
+}
+
+type BSType []string
+
+func (bs *BSType) Set(v string) error {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	v = strings.ToLower(v)
+	var val = strings.Split(v, ",")
+	var valid = []string{"512", "1k", "2k", "4k", "8k", "16k", "32k", "64k", "128k", "256k", "512k", "1m"}
+	*bs = []string{}
+	for _, s := range val {
+		if !contains(valid, s) {
+			return fmt.Errorf("Invalid value for block size: %s\n\tUse something from this list: %v\n", s, valid)
+		}
+		*bs = append(*bs, s)
+	}
+
+	return nil
+}
+
+type JobsType []int
+
+func (j *JobsType) Set(v string) error {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	v = strings.ToLower(v)
+	var val = strings.Split(v, ",")
+	*j = []int{}
+	var valid = []int{1, 4, 8, 16, 32}
+	for _, s := range val {
+		n, err := strconv.Atoi(s)
+		if err != nil || !containsInt(valid, n) {
+			return fmt.Errorf("Invalid value for jobs %d\n\tUse something from this list: %v\n", n, valid)
+		}
+		*j = append(*j, n)
+	}
+
+	return nil
+}
+
+type DepthType []int
+
+func (d *DepthType) Set(v string) error {
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	v = strings.ToLower(v)
+	var val = strings.Split(v, ",")
+	*d = []int{}
+	var valid = []int{1, 4, 8, 16, 32}
+	for _, s := range val {
+		n, err := strconv.Atoi(s)
+		if err != nil || !containsInt(valid, n) {
+			return fmt.Errorf("Invalid value for iodepth %d\n\tUse something from this list: %v\n", n, valid)
+		}
+		*d = append(*d, n)
+	}
+
+	return nil
+}
 type FioOptions struct {
-	OperationType []OperationType
-	BlockSize     []BlockSize
-	JobType       []JobType
-	DepthType     []DepthType
+	Operations 	OpType
+	BlockSize   BSType
+	Jobs      	JobsType
+	Iodepth     DepthType
 }
 
 func CountTests(cfg FioOptions) int {
-	if len(cfg.OperationType) == 0 {
-		cfg.OperationType = []OperationType{
-			OperationTypeRead,
-			OperationTypeWrite,
-		}
+	if len(cfg.Operations) == 0 {
+		cfg.Operations = OpType{"read", "write"}
 	}
 
 	if len(cfg.BlockSize) == 0 {
-		cfg.BlockSize = []BlockSize{
-			BlockSize4k,
-			BlockSize64k,
-			BlockSize1m,
-		}
+		cfg.BlockSize = BSType{"4k", "64k", "1m"}
 	}
 
-	if len(cfg.JobType) == 0 {
-		cfg.JobType = []JobType{
-			JobType1,
-			JobType8,
-		}
+	if len(cfg.Jobs) == 0 {
+		cfg.Jobs = JobsType{1, 8}
 	}
 
-	if len(cfg.DepthType) == 0 {
-		cfg.DepthType = []DepthType{
-			DepthType1,
-			DepthType8,
-			DepthType32,
-		}
+	if len(cfg.Iodepth) == 0 {
+		cfg.Iodepth = DepthType{1, 8, 32}
 	}
-	return len(cfg.OperationType) * len(cfg.BlockSize) * len(cfg.JobType) * len(cfg.DepthType)
+	return len(cfg.Operations) * len(cfg.BlockSize) * len(cfg.Jobs) * len(cfg.Iodepth)
 }
 
 // GenerateFIOConfig generate confiig for FIO from provided params
@@ -138,36 +172,22 @@ func CountTests(cfg FioOptions) int {
 func GenerateFIOConfig(
 	cfg FioOptions,
 	runtime time.Duration,
-	outPath, sshUser string,
+	outPath, sshUser, targetDevice string,
 ) error {
-	if len(cfg.OperationType) == 0 {
-		cfg.OperationType = []OperationType{
-			OperationTypeRead,
-			OperationTypeWrite,
-		}
+	if len(cfg.Operations) == 0 {
+		cfg.Operations = OpType{"read", "write"}
 	}
 
 	if len(cfg.BlockSize) == 0 {
-		cfg.BlockSize = []BlockSize{
-			BlockSize4k,
-			BlockSize64k,
-			BlockSize1m,
-		}
+		cfg.BlockSize = BSType{"4k", "64k", "1m"}
 	}
 
-	if len(cfg.JobType) == 0 {
-		cfg.JobType = []JobType{
-			JobType1,
-			JobType8,
-		}
+	if len(cfg.Jobs) == 0 {
+		cfg.Jobs = JobsType{1, 8}
 	}
 
-	if len(cfg.DepthType) == 0 {
-		cfg.DepthType = []DepthType{
-			DepthType1,
-			DepthType8,
-			DepthType32,
-		}
+	if len(cfg.Iodepth) == 0 {
+		cfg.Iodepth = DepthType{1, 8, 32}
 	}
 
 	if (runtime == 0) {
@@ -177,10 +197,14 @@ func GenerateFIOConfig(
 
 	var countTests = CountTests(cfg)
 	ftPath := filepath.Join("/users/", sshUser, "/fio.test.file")
- 	fmt.Fprintln(os.Stderr, "type:", cfg.OperationType)
-	fmt.Fprintln(os.Stderr, "bs:", cfg.BlockSize)
-	fmt.Fprintln(os.Stderr, "jobs:", cfg.JobType)
-	fmt.Fprintln(os.Stderr, "depth:", cfg.DepthType)
+	if targetDevice != "" {
+		ftPath = targetDevice
+	}
+
+ 	fmt.Fprintln(os.Stderr, "optype:", cfg.Operations)
+	fmt.Fprintln(os.Stderr, "BlockSize:", cfg.BlockSize)
+	fmt.Fprintln(os.Stderr, "jobs:", cfg.Jobs)
+	fmt.Fprintln(os.Stderr, "iodepth:", cfg.Iodepth)
 	fmt.Fprintln(os.Stderr, "time:", sTime)
 	fmt.Fprintln(os.Stderr, "Total tests:", countTests)
 
@@ -197,11 +221,11 @@ func GenerateFIOConfig(
 	fmt.Fprintf(fd, globalTpl, sTime, ftPath)
 	//}
 
-	for _, rw := range cfg.OperationType {
+	for _, rw := range cfg.Operations {
 		for _, bs := range cfg.BlockSize {
 			var count = 0
-			for _, depth := range cfg.DepthType {
-				for _, job := range cfg.JobType {
+			for _, depth := range cfg.Iodepth {
+				for _, job := range cfg.Jobs {
 					var section = fmt.Sprintf("%s-%s-%d", rw, bs, count)
 					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job)
 					count++
