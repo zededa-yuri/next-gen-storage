@@ -1,15 +1,17 @@
 package fiotests
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
-	"fmt"
-	"time"
+	"os/exec"
 	"path/filepath"
-	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/sshwork"
-	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
+	"time"
+
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/fioconv"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/sshwork"
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
 )
@@ -155,7 +157,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 		return fmt.Errorf("could not get result.json file from VM: %w", err)
 	}
 
-	// Download dmesg reults
+	// Download remote dmesg reults
 	if err := sshwork.GetFileSCP(
 		client,
 		filepath.Join(localResultsAbsDir, "/guest_dmesg"),
@@ -170,6 +172,25 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	); err != nil {
 		return fmt.Errorf("could not convert JSON to CSV: %w", err)
 	}
+
+	// Save local dmesg file
+	out, err := exec.Command("cp", "/var/log/dmesg", filepath.Join(localResultsAbsDir, "/host_dmesg")).CombinedOutput()
+	if err != nil {
+		fmt.Println("Copying local dmesg file with logs failed! ", err, out)
+	}
+
+	// Saving information about the hardware
+	output, err := exec.Command("lshw").CombinedOutput()
+	if err != nil {
+		fmt.Println("Failed to collect hardware data! ", err)
+	}
+	lshw := filepath.Join(localResultsAbsDir, "lshw-result")
+	file, err := os.Create(lshw)
+    if err != nil{
+        fmt.Println("Failed to create file with hardware information: ", err)
+    }
+    defer file.Close()
+    file.WriteString(string(output))
 
 	fmt.Println("Tests finished!")
 	return nil
