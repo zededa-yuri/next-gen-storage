@@ -3,8 +3,8 @@ package qemutmp
 const QemuConfTemplate = `
 [drive "hd"]
   if = "none"
-  file = "bionic-server-cloudimg-i386.img"
-  format = "raw"
+  file = "{{.FileLocation}}"
+  format = "{{.Format}}"
 
 [device]
   driver = "intel-iommu"
@@ -53,12 +53,13 @@ const QemuConfTemplate = `
   graphics = "off"
 
 [memory]
-  size = "512"
+  size = "{{.Memory}}"
+
 
 [smp-opts]
-  cpus = "2"
+  cpus = "{{.VCpus}}"
   sockets = "1"
-  cores = "2"
+  cores = "{{.VCpus}}"
   threads = "1"
 
 [realtime]
@@ -84,3 +85,5 @@ const QemuConfTemplate = `
   mode = "readline"
   chardev = "charmonitor"
 `
+
+const qemuDiskTemplate = ``
