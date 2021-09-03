@@ -18,16 +18,27 @@ import (
 
 
 type QemuCommand struct {
-	Gdb bool `short:"g" long:"gdb" description:"just at test argurment"`
-	Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+	//Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+	CQemuConfigDir 	string `short:"c" long:"config" description:"The option takes the path to the QEMU configuration file"`
+	CFileLocation 	string `short:"i" long:"image" description:"The option takes the path to the .img file" default:"bionic-server-cloudimg-i386.img"`
+	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
+	CVCpus 			string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
+	CMemory			string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
+	CPort			int	`short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
+	CCountVM		int `short:"n" long:"number" description:"Count create VM" default:"1"`
+	// CKernel		 	string `short:"k" long:"kernel" description:"[Options] Path to the kernel"`
 }
 
 var qemu_command QemuCommand
-type mainTemplateArgs struct {
-	foo string
+type VmConfig struct {
+	FileLocation 	string // default "bionic-server-cloudimg-i386.img"
+	Format 			string // default "raw"
+	VCpus 			string // default "2"
+	Memory 			string // default "512"
+	Kernel 			string // default ""
 }
 
-func write_main_config(path string, template_args mainTemplateArgs) error {
+func write_main_config(path string, template_args VmConfig) error {
 	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
 
 	config_f, err := os.OpenFile(path,
@@ -53,7 +64,7 @@ type SshConnection struct {
 	client *ssh.Client
 }
 
-func (connection SshConnection) Init(ctx context.Context) error {
+func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
 	log.Printf("Loading keyfile %s\n", key_path)
@@ -84,30 +95,28 @@ func (connection SshConnection) Init(ctx context.Context) error {
 	}
 
 	var client *ssh.Client
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 30; i++ {
 		log.Printf("Dialing in\n")
-		client, err = ssh.Dial("tcp", "localhost:6666", config)
+		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
 		if err != nil {
 			log.Printf("unable to connect: %v", err)
 		} else {
 			break
 		}
-		log.Printf("sleeping 1 sec\n")
+		log.Printf("Sleeping 5 sec\n")
 		time.Sleep(5 * time.Second)
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			return ctx.Err()
 		}
 	}
 
-
 	if err != nil {
 		log.Printf("failed to establish connection after serveral attempts\n")
 		return err
 	}
+	log.Printf("Connection for address [%s] success\n", fmt.Sprintf("localhost:%d", ssHport))
 	// Connect to the remote server and perform the SSH handshake.
-
 	connection.client = client
-
 	return nil
 }
 
@@ -121,7 +130,12 @@ func get_self_path() (string) {
 
 func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
-	template_args := mainTemplateArgs{"bar"}
+	//Init args for template
+	template_args := VmConfig{}
+	template_args.FileLocation = qemu_command.CFileLocation
+	template_args.Format = qemu_command.CFormat
+	template_args.VCpus = qemu_command.CVCpus
+	template_args.Memory = qemu_command.CMemory
 
 	qemuConfigDir := filepath.Join(get_self_path(), "configs/qemu.cfg")
 	err := write_main_config(qemuConfigDir, template_args)
@@ -129,32 +143,34 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		return
 	}
 
-	cmd := exec.CommandContext(ctx,
-		"qemu-system-x86_64",
-		"-readconfig",  qemuConfigDir,
-		"-display", "none",
-		"-device", "e1000,netdev=net0",  "-netdev",  "user,id=net0,hostfwd=tcp::6666-:22",
-		"-serial", "chardev:ch0")
+	if qemu_command.CCountVM == 1 {}
+	var cmd *exec.Cmd
+	for i := 0; i < qemu_command.CCountVM; i++ {
+		cmd = exec.CommandContext(ctx,
+			"qemu-system-x86_64",
+			"-readconfig",  qemuConfigDir,
+			"-display", "none",
+			"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", qemu_command.CPort + i),
+			"-serial", "chardev:ch0")
 
-	// cmd := exec.CommandContext(ctx, "ls", "-z")
+		var out bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &out
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+		fmt.Printf("Create VM \n")
+		err = cmd.Run()
 
-	fmt.Printf("Running a command\n")
-	err = cmd.Run()
-
-	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-		fmt.Printf("Cancelled: %v\n", ctx.Err())
-		return
-	} else if err != nil {
-		fmt.Printf("error launching command: %v; err=%v\n", err, ctx.Err())
-		fmt.Printf("%s\n", out)
-		cancel()
-	} else {
-		fmt.Printf("command returned:\n%s\n", out)
-		cancel()
+		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+			fmt.Printf("Cancelled: %v\n", ctx.Err())
+			return
+		} else if err != nil {
+			fmt.Printf("error launching command: %v; err=%v\n", err, ctx.Err())
+			fmt.Printf("%s\n", out)
+			cancel()
+		} else {
+			fmt.Printf("command returned:\n%s\n", out)
+			cancel()
+		}
 	}
 }
 
@@ -171,9 +187,14 @@ func (x *QemuCommand) Execute(args []string) error {
 	go qemu_run(ctx, cancel)
 
 	var connection SshConnection
-	connection.Init(ctx)
-	fmt.Printf("connection established\n")
 
+	for i := 0; i < qemu_command.CCountVM; i++ {
+		err := connection.Init(ctx, qemu_command.CPort + i)
+		if err != nil {
+			return fmt.Errorf("Connection to VM on address[%d] failed: %w", qemu_command.CPort + 1, err)
+		}
+	}
+	//fmt.Printf("connection established\n")
 	return nil
 }
 

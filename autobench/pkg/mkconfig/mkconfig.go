@@ -202,12 +202,7 @@ func GenerateFIOConfig(
 		ftPath = targetDevice
 	}
 
- 	fmt.Fprintln(os.Stderr, "optype:", cfg.Operations)
-	fmt.Fprintln(os.Stderr, "BlockSize:", cfg.BlockSize)
-	fmt.Fprintln(os.Stderr, "jobs:", cfg.Jobs)
-	fmt.Fprintln(os.Stderr, "iodepth:", cfg.Iodepth)
-	fmt.Fprintln(os.Stderr, "time:", sTime)
-	fmt.Fprintln(os.Stderr, "Total tests:", countTests)
+	fmt.Fprintln(os.Stderr, "Total generated tests:", countTests)
 
 	fd, err := os.Create(outPath)
 	if err != nil {
