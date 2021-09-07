@@ -103,11 +103,13 @@ func (x *FioParametrs) Execute(args []string) error {
 			return fmt.Errorf("FIO tests failed: %v", err)
 		} */
 	}
-	
+
 	// Heartbeat
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
+	fmt.Println("Total waiting time before the end of the test:", totalTime)
+
 	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
