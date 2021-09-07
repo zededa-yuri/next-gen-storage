@@ -146,7 +146,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 			if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
 				return fmt.Errorf("VM is fail. Test failed")
 			}
-			fmt.Println("Checking... Nothing broken yet. Let's wait a bit.")
+			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ", sshHost)
 		}
 	}
 
@@ -157,7 +157,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 		filepath.Join(localResultsAbsDir, "/result.json"),
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	); err != nil {
-		return fmt.Errorf("could not get result.json file from VM: %w", err)
+		return fmt.Errorf("Could not get result.json file from VM: %w", err)
 	}
 
 	// Download remote dmesg reults

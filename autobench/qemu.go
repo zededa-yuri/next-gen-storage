@@ -24,8 +24,8 @@ type QemuCommand struct {
 	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus 			string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
 	CMemory			string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
-	CPort			int	`short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
-	CCountVM		int `short:"n" long:"number" description:"Count create VM" default:"1"`
+	//CPort			int	`short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
+	//CCountVM		int `short:"n" long:"number" description:"Count create VM" default:"1"`
 	// CKernel		 	string `short:"k" long:"kernel" description:"[Options] Path to the kernel"`
 }
 
@@ -143,14 +143,14 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		return
 	}
 
-	if qemu_command.CCountVM == 1 {}
+	if opts.CCountVM == 1 {}
 	var cmd *exec.Cmd
-	for i := 0; i < qemu_command.CCountVM; i++ {
+	for i := 0; i < opts.CCountVM; i++ {
 		cmd = exec.CommandContext(ctx,
 			"qemu-system-x86_64",
 			"-readconfig",  qemuConfigDir,
 			"-display", "none",
-			"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", qemu_command.CPort + i),
+			"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", opts.CPort + i),
 			"-serial", "chardev:ch0")
 
 		var out bytes.Buffer
@@ -177,7 +177,7 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
-
+	fmt.Println("TAAAAAAAAA! ", opts.CPort, opts.CCountVM)
 	/* XXX: give the process a chance to terminate. Proper waiting is
 	 *  required here
 	 */
@@ -188,10 +188,10 @@ func (x *QemuCommand) Execute(args []string) error {
 
 	var connection SshConnection
 
-	for i := 0; i < qemu_command.CCountVM; i++ {
-		err := connection.Init(ctx, qemu_command.CPort + i)
+	for i := 0; i < opts.CCountVM; i++ {
+		err := connection.Init(ctx, opts.CPort + i)
 		if err != nil {
-			return fmt.Errorf("Connection to VM on address[%d] failed: %w", qemu_command.CPort + 1, err)
+			return fmt.Errorf("Connection to VM on address[%d] failed: %w", opts.CPort + i, err)
 		}
 	}
 	//fmt.Printf("connection established\n")
