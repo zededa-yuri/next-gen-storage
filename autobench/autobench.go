@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -20,11 +21,12 @@ const fioComandDesc = `
 
 `
 type Options struct {
-	//Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+	CPort			int	`short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
+	CCountVM		int `short:"n" long:"number" description:"Count create VM" default:"1"`
 }
 
 type FioParametrs struct {
-	SSHhost string 				`short:"a" long:"adress" description:"ip:port for ssh connections." default:"127.0.0.1:22"`
+	SSHhost string 				`short:"a" long:"adress" description:"ip:port for ssh connections." default:"127.0.0.1"`
 	SSHUser string 				`short:"u" long:"user" description:"A user name for ssh connections" default:"root"`
 	TimeOneTest int 			`short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
 	OpType string				`short:"o" long:"optype" description:"Operation types I/O for fio config" long-description:"Use comma separated string with combinations of read, write, randread, randwrite ..." default:"read,write"`
@@ -55,6 +57,13 @@ func argparse() {
 	}
 }
 
+func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) {
+	if err := fiotests.RunFIOTest(fmt.Sprintf("%s:%d", sshHost, port), sshUser, localResultsFolder, localDirResults, targetDevice, fioOptions, fioTestTime); err != nil {
+		log.Printf("FIO tests failed: %v", err)
+	}
+	return
+}
+
 // Execute FIO tests via ssh
 func (x *FioParametrs) Execute(args []string) error {
 	var fioOptions = mkconfig.FioOptions{}
@@ -79,10 +88,6 @@ func (x *FioParametrs) Execute(args []string) error {
 		return fmt.Errorf("FIO tests failed: %v", err)
 	}
 
-	if err = fiotests.RunFIOTest(fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second); err != nil {
-		return fmt.Errorf("FIO tests failed: %v", err)
-	}
-
 	if fioCmd.CheckSumm != "" {
 		var valid = []string{"md5", "crc64", "crc32c", "crc32c-intel", "crc32", "crc16", "crc7", "xxhash", "sha512", "sha256", "sha1", "meta"}
 		if mkconfig.Contains(valid, fioCmd.CheckSumm) {
@@ -91,6 +96,31 @@ func (x *FioParametrs) Execute(args []string) error {
 		fioOptions.CheckSumm = fioCmd.CheckSumm
 	}
 
+	for i := 0; i < opts.CCountVM; i++ {
+		time.Sleep(5 * time.Second) // For create new folder for new test
+		go fio(opts.CPort + i, fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second)
+		/* if err = fiotests.RunFIOTest(fmt.Sprintf("%s:%d", fioCmd.SSHhost, opts.CPort + i), fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second); err != nil {
+			return fmt.Errorf("FIO tests failed: %v", err)
+		} */
+	}
+	
+	// Heartbeat
+	var countTests = mkconfig.CountTests(fioOptions)
+	const bufferTime = 5 * time.Minute
+	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
+	timerTomeOut := time.After(totalTime)
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	there:
+	for {
+		select {
+		case <-timerTomeOut:
+			ticker.Stop()
+			break there
+
+		}
+	}
 	return nil
 }
 
