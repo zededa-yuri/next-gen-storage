@@ -171,13 +171,13 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 			fmt.Printf("command returned:\n%s\n", out)
 			cancel()
 		}
+		fmt.Printf("Create VM in QEMU by the address: localhost:%d\n", opts.CPort + i)
 	}
 }
 
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
-	fmt.Println("TAAAAAAAAA! ", opts.CPort, opts.CCountVM)
 	/* XXX: give the process a chance to terminate. Proper waiting is
 	 *  required here
 	 */

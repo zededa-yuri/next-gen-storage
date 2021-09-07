@@ -116,7 +116,6 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 2 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
-	fmt.Println("Total waiting time before the end of the test:", totalTime)
 
 	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
 	fioRunCmd := fmt.Sprintf(
