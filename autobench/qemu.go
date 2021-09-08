@@ -37,6 +37,10 @@ type VmConfig struct {
 
 func write_main_config(path string, template_args VmConfig) error {
 	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
+	if err != nil {
+		fmt.Printf("failed parse template%v\n", err)
+		return err
+	}
 
 	config_f, err := os.OpenFile(path,
 		os.O_RDWR | os.O_CREATE | os.O_TRUNC,
@@ -58,13 +62,13 @@ func write_main_config(path string, template_args VmConfig) error {
 }
 
 type SshConnection struct {
-	client *ssh.Client
+	//client *ssh.Client
 }
 
 func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 	home := os.Getenv("HOME")
 	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
-	log.Printf("Loading keyfile %s\n", key_path)
+	log.Printf("Loading keyfile %s\n----------------------------\n", key_path)
 	key, err := ioutil.ReadFile(key_path)
 	if err != nil {
 		log.Fatalf("unable to read private key: %v", err)
@@ -91,19 +95,20 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 		HostKeyCallback: hostKeyCallback,
 	}
 
-	var client *ssh.Client
+	time.Sleep(1 * time.Second) // For waiting create VM
+
 	for i := 0; i < 30; i++ {
-		log.Printf("Dialing in\n")
-		client, err = ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", ssHport), config)
+		_, err := ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
 		if err != nil {
-			log.Printf("Unable to connect: 127.0.0.1:%d err:%v",  ssHport, err)
+			log.Printf("Unable to connect: 127.0.0.1:%d err:%v", ssHport, err)
 		} else {
+			log.Printf("Connection to: 127.0.0.1:%d was successful", ssHport)
 			break
 		}
+
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			return ctx.Err()
 		}
-		log.Printf("Waiting 3 sec\n")
 		time.Sleep(3 * time.Second)
 	}
 
@@ -113,7 +118,6 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 	}
 	log.Printf("Connection for address [%s] success\n", fmt.Sprintf("localhost:%d", ssHport))
 	// Connect to the remote server and perform the SSH handshake.
-	connection.client = client
 	return nil
 }
 
@@ -126,8 +130,6 @@ func get_self_path() (string) {
 }
 
 func qemu_run(ctx context.Context, cancel context.CancelFunc) {
-
-	//Init args for template
 	template_args := VmConfig{}
 	template_args.FileLocation = qemu_command.CFileLocation
 	template_args.Format = qemu_command.CFormat
@@ -140,7 +142,6 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		return
 	}
 
-	if opts.CCountVM == 1 {}
 	var cmd *exec.Cmd
 	for i := 0; i < opts.CCountVM; i++ {
 		cmd = exec.CommandContext(ctx,
@@ -154,18 +155,15 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		cmd.Stdout = &out
 		cmd.Stderr = &out
 
-		fmt.Printf("Create VM \n")
-		err = cmd.Run()
-
+		err = cmd.Run() //no have end for this command
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-			fmt.Printf("Cancelled: %v\n", ctx.Err())
+			fmt.Printf("Cancelled via timer: %v\n", ctx.Err())
 			return
 		} else if err != nil {
-			fmt.Printf("error launching command: %v; err=%v\n", err, ctx.Err())
-			fmt.Printf("%s\n", out)
+			fmt.Printf("error launching command: %v; err=%v\nStdout:\n%v\n", err, ctx.Err(), out)
 			cancel()
 		} else {
-			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%s\n", opts.CPort + i, out)
+			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%v\n", opts.CPort + i, out)
 			cancel()
 		}
 
@@ -174,21 +172,20 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
-	ctxVM, powerVM := context.WithTimeout(ctx, 3 * time.Minute)
-	ctxTimer, cancel := context.WithTimeout(ctx, 100 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60 * time.Second)
 	/* XXX: give the process a chance to terminate. Proper waiting is
 	 *  required here
 	 */
 	defer cancel()
 
-	go qemu_run(ctxVM, powerVM)
+	go qemu_run(ctx, cancel)
 
 	var connection SshConnection
 
 	for i := 0; i < opts.CCountVM; i++ {
-		err := connection.Init(ctxTimer, opts.CPort + i)
+		err := connection.Init(ctx, opts.CPort + i)
 		if err != nil {
-			return fmt.Errorf("Connection to VM on address[%d] failed: %w", opts.CPort + i, err)
+			return fmt.Errorf("connection to VM on address[%d] failed: %w", opts.CPort + i, err)
 		}
 	}
 

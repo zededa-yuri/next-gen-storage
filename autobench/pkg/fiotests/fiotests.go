@@ -94,7 +94,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
 	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser, targetDevice)
 
-	// Create folder on VM  FIXME
+	// Create folder on VM
 	remoteResultsAbsDir := filepath.Join("/users/", sshUser, "/FIO" + curentDate)
 	if err := sshwork.SendCommandSSH(
 		client,

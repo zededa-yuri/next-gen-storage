@@ -62,7 +62,6 @@ func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, target
 	if err := fiotests.RunFIOTest(fmt.Sprintf("%s:%d", sshHost, port), sshUser, localResultsFolder, localDirResults, targetDevice, fioOptions, fioTestTime); err != nil {
 		log.Printf("FIO tests failed: %v", err)
 	}
-	return
 }
 
 // Execute FIO tests via ssh
@@ -92,7 +91,7 @@ func (x *FioParametrs) Execute(args []string) error {
 	if fioCmd.CheckSumm != "" {
 		var valid = []string{"md5", "crc64", "crc32c", "crc32c-intel", "crc32", "crc16", "crc7", "xxhash", "sha512", "sha256", "sha1", "meta"}
 		if mkconfig.Contains(valid, fioCmd.CheckSumm) {
-			return fmt.Errorf("Invalid value for check summ")
+			return fmt.Errorf("invalid value for check summ")
 		}
 		fioOptions.CheckSumm = fioCmd.CheckSumm
 	}
