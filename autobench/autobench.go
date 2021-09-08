@@ -29,14 +29,15 @@ type FioParametrs struct {
 	SSHhost string 				`short:"a" long:"adress" description:"ip:port for ssh connections." default:"127.0.0.1"`
 	SSHUser string 				`short:"u" long:"user" description:"A user name for ssh connections" default:"root"`
 	TimeOneTest int 			`short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
-	OpType string				`short:"o" long:"optype" description:"Operation types I/O for fio config" long-description:"Use comma separated string with combinations of read, write, randread, randwrite ..." default:"read,write"`
+	OpType string				`short:"o" long:"optype" description:"Operation types I/O for fio config" default:"read,write"`
 	BlockSize string 			`short:"b" long:"bs" description:"Block size for fio config"  default:"4k,64k,1m"`
 	Iodepth string 				`short:"d" long:"iodepth" description:"Iodepth for fio config" default:"8,16,32"`
-	CheckSumm string			`short:"c" long:"check" description:"Data integrity check. Can be one of the following values: (md5, crc64, crc32c, crc32c-intel, crc32, crc16, crc7, xxhash, sha512, sha256, sha1, ..., meta)"`
+	CheckSumm string			`short:"c" long:"check" description:"Data integrity check. Can be one of the following values: (md5, crc64, crc32c, ..., sha256)"`
 	Jobs string					`short:"j" long:"jobs" description:"Jobs for fio config" default:"1,8"`
-	TargetFIODevice string 		`short:"T" long:"target" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
+	TargetFIODevice string 		`short:"D" long:"targetdev" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
 	LocalFolderResults string 	`short:"f" long:"folder" description:"[Optional] A name of folder with tests results" default:"FIOTestsResults"`
-	LocalDirResults string 		`short:"p" long:"path" description:"[Optional] Path to directory with test results. By default, a folder with the results is created at the path where the utility is launched."`
+	LocalDirResults string 		`short:"p" long:"path" description:"[Optional] Path to directory with test results"`
+	Target string				`short:"T" long:"target" description:"Target for benchmark tests" default:"qemu"`
 }
 
 var fioCmd FioParametrs
@@ -96,12 +97,13 @@ func (x *FioParametrs) Execute(args []string) error {
 		fioOptions.CheckSumm = fioCmd.CheckSumm
 	}
 
+	if fioCmd.Target == "qemu" {
+		go qemu_command.Execute(args)
+	}
+
 	for i := 0; i < opts.CCountVM; i++ {
 		time.Sleep(5 * time.Second) // For create new folder for new test
 		go fio(opts.CPort + i, fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second)
-		/* if err = fiotests.RunFIOTest(fmt.Sprintf("%s:%d", fioCmd.SSHhost, opts.CPort + i), fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second); err != nil {
-			return fmt.Errorf("FIO tests failed: %v", err)
-		} */
 	}
 
 	// Heartbeat
@@ -120,7 +122,6 @@ func (x *FioParametrs) Execute(args []string) error {
 		case <-timerTomeOut:
 			ticker.Stop()
 			break there
-
 		}
 	}
 	return nil
