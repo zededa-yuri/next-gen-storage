@@ -18,15 +18,12 @@ import (
 
 
 type QemuCommand struct {
-	//Verbose []bool `short:"v" long:"verbose" description:"Show verbose debug information"`
+
 	CQemuConfigDir 	string `short:"c" long:"config" description:"The option takes the path to the QEMU configuration file"`
 	CFileLocation 	string `short:"i" long:"image" description:"The option takes the path to the .img file" default:"bionic-server-cloudimg-i386.img"`
 	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus 			string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
 	CMemory			string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
-	//CPort			int	`short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
-	//CCountVM		int `short:"n" long:"number" description:"Count create VM" default:"1"`
-	// CKernel		 	string `short:"k" long:"kernel" description:"[Options] Path to the kernel"`
 }
 
 var qemu_command QemuCommand
@@ -97,14 +94,14 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 	var client *ssh.Client
 	for i := 0; i < 30; i++ {
 		log.Printf("Dialing in\n")
-		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
+		client, err = ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", ssHport), config)
 		if err != nil {
 			log.Printf("unable to connect: %v", err)
 		} else {
 			break
 		}
-		log.Printf("Sleeping 5 sec\n")
-		time.Sleep(5 * time.Second)
+		log.Printf("Waiting 3 sec\n")
+		time.Sleep(3 * time.Second)
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			return ctx.Err()
 		}
@@ -137,7 +134,7 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 	template_args.VCpus = qemu_command.CVCpus
 	template_args.Memory = qemu_command.CMemory
 
-	qemuConfigDir := filepath.Join(get_self_path(), "configs/qemu.cfg")
+	qemuConfigDir := filepath.Join(get_self_path(), "qemu.cfg")
 	err := write_main_config(qemuConfigDir, template_args)
 	if err != nil {
 		return
@@ -168,20 +165,19 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 			fmt.Printf("%s\n", out)
 			cancel()
 		} else {
-			fmt.Printf("command returned:\n%s\n", out)
+			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%s\n", opts.CPort + i, out)
 			cancel()
 		}
-		fmt.Printf("Create VM in QEMU by the address: localhost:%d\n", opts.CPort + i)
+
 	}
 }
 
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 100 * time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60 * time.Second)
 	/* XXX: give the process a chance to terminate. Proper waiting is
 	 *  required here
 	 */
-	defer time.Sleep(time.Second)
 	defer cancel()
 
 	go qemu_run(ctx, cancel)
@@ -194,7 +190,7 @@ func (x *QemuCommand) Execute(args []string) error {
 			return fmt.Errorf("Connection to VM on address[%d] failed: %w", opts.CPort + i, err)
 		}
 	}
-	//fmt.Printf("connection established\n")
+
 	return nil
 }
 
