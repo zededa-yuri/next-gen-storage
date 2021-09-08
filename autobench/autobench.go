@@ -17,7 +17,7 @@ const fioComandDesc = `
 	This command can take configuration values for FIO.
 
 	Example use:
-	autobench fio -a=127.0.0.1:22 -u=ubuntu -o=read,randread -b=4k,1m -t=30
+	autobench -p=6666 -n=2 fio -T=qemu -a=127.0.0.1 -u=ubuntu -o=read,randread -b=4k,1m -t=30
 
 `
 type Options struct {
@@ -100,6 +100,7 @@ func (x *FioParametrs) Execute(args []string) error {
 	if fioCmd.Target == "qemu" {
 		go qemu_command.Execute(args)
 	}
+	time.Sleep(1 * time.Minute) // For waiting create VM
 
 	for i := 0; i < opts.CCountVM; i++ {
 		time.Sleep(5 * time.Second) // For create new folder for new test
