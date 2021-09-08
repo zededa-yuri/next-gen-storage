@@ -96,15 +96,15 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 		log.Printf("Dialing in\n")
 		client, err = ssh.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", ssHport), config)
 		if err != nil {
-			log.Printf("unable to connect: %v", err)
+			log.Printf("Unable to connect: 127.0.0.1:%d err:%v",  ssHport, err)
 		} else {
 			break
 		}
-		log.Printf("Waiting 3 sec\n")
-		time.Sleep(3 * time.Second)
 		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
 			return ctx.Err()
 		}
+		log.Printf("Waiting 3 sec\n")
+		time.Sleep(3 * time.Second)
 	}
 
 	if err != nil {
@@ -174,18 +174,19 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 60 * time.Second)
+	ctxVM, powerVM := context.WithTimeout(ctx, 3 * time.Minute)
+	ctxTimer, cancel := context.WithTimeout(ctx, 100 * time.Second)
 	/* XXX: give the process a chance to terminate. Proper waiting is
 	 *  required here
 	 */
 	defer cancel()
 
-	go qemu_run(ctx, cancel)
+	go qemu_run(ctxVM, powerVM)
 
 	var connection SshConnection
 
 	for i := 0; i < opts.CCountVM; i++ {
-		err := connection.Init(ctx, opts.CPort + i)
+		err := connection.Init(ctxTimer, opts.CPort + i)
 		if err != nil {
 			return fmt.Errorf("Connection to VM on address[%d] failed: %w", opts.CPort + i, err)
 		}
