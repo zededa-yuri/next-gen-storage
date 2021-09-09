@@ -43,6 +43,7 @@ type FioParametrs struct {
 var fioCmd FioParametrs
 var opts Options
 var parser = flags.NewParser(&opts, flags.Default)
+var testFailed = make(chan bool)
 
 func argparse() {
 	if _, err := parser.Parse(); err != nil {
@@ -60,7 +61,8 @@ func argparse() {
 
 func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) {
 	if err := fiotests.RunFIOTest(fmt.Sprintf("%s:%d", sshHost, port), sshUser, localResultsFolder, localDirResults, targetDevice, fioOptions, fioTestTime); err != nil {
-		log.Printf("FIO tests failed: %v", err)
+		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("%s:%d", sshHost, port), err)
+		testFailed <- true
 	}
 }
 
@@ -120,6 +122,9 @@ func (x *FioParametrs) Execute(args []string) error {
 	for {
 		select {
 		case <-timerTomeOut:
+			ticker.Stop()
+			break there
+		case <-testFailed:
 			ticker.Stop()
 			break there
 		}
