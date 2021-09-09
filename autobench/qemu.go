@@ -18,7 +18,6 @@ import (
 
 
 type QemuCommand struct {
-
 	CQemuConfigDir 	string `short:"c" long:"config" description:"The option takes the path to the QEMU configuration file"`
 	CFileLocation 	string `short:"i" long:"image" description:"The option takes the path to the .img file" default:"bionic-server-cloudimg-i386.img"`
 	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
@@ -160,10 +159,10 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 			fmt.Printf("Cancelled via timer: %v\n", ctx.Err())
 			return
 		} else if err != nil {
-			fmt.Printf("error launching command: %v; err=%v\nStdout:\n%v\n", err, ctx.Err(), out)
+			fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out)
 			cancel()
 		} else {
-			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%v\n", opts.CPort + i, out)
+			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%s\n", opts.CPort + i, out)
 			cancel()
 		}
 
