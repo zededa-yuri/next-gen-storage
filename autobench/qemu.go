@@ -1,19 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"bytes"
-	"fmt"
 	"os"
-	"path/filepath"
 	"os/exec"
-	"context"
-	"time"
+	"path/filepath"
 	"text/template"
+	"time"
+
+	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"golang.org/x/crypto/ssh"
 	kh "golang.org/x/crypto/ssh/knownhosts"
-	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 )
 
 
@@ -94,8 +95,8 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 		HostKeyCallback: hostKeyCallback,
 	}
 
-	time.Sleep(1 * time.Second) // For waiting create VM
 
+	time.Sleep(3 * time.Second) // For waiting create VM
 	for i := 0; i < 30; i++ {
 		_, err := ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
 		if err != nil {
@@ -115,7 +116,6 @@ func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
 		log.Printf("failed to establish connection after serveral attempts\n")
 		return err
 	}
-	log.Printf("Connection for address [%s] success\n", fmt.Sprintf("localhost:%d", ssHport))
 	// Connect to the remote server and perform the SSH handshake.
 	return nil
 }
@@ -128,7 +128,32 @@ func get_self_path() (string) {
 	return filepath.Dir(ex)
 }
 
-func qemu_run(ctx context.Context, cancel context.CancelFunc) {
+func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir string, port int) {
+
+	cmd := exec.CommandContext(ctx,
+		"qemu-system-x86_64",
+		"-readconfig",  qemuConfigDir,
+		"-display", "none",
+		"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", port),
+		"-serial", "chardev:ch0")
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+
+	err := cmd.Run() //no have end for this command
+	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+		fmt.Printf("Cancelled via timer: %v\n", ctx.Err())
+		return
+	} else if err != nil {
+		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out)
+		cancel()
+	} else {
+		cancel()
+	}
+}
+
+func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration) {
 	template_args := VmConfig{}
 	template_args.FileLocation = qemu_command.CFileLocation
 	template_args.Format = qemu_command.CFormat
@@ -141,52 +166,34 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc) {
 		return
 	}
 
-	var cmd *exec.Cmd
+
 	for i := 0; i < opts.CCountVM; i++ {
-		cmd = exec.CommandContext(ctx,
-			"qemu-system-x86_64",
-			"-readconfig",  qemuConfigDir,
-			"-display", "none",
-			"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", opts.CPort + i),
-			"-serial", "chardev:ch0")
-
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &out
-
-		err = cmd.Run() //no have end for this command
-		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-			fmt.Printf("Cancelled via timer: %v\n", ctx.Err())
-			return
-		} else if err != nil {
-			fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out)
-			cancel()
-		} else {
-			fmt.Printf("Create VM in QEMU by the address: localhost:%d command returned:\n%s\n", opts.CPort + i, out)
-			cancel()
-		}
-
+		go qemu_run(ctx, cancel, qemuConfigDir, opts.CPort + i)
+		log.Printf("Create VM by the address [localhost:%d] with limit time in %v\n", opts.CPort + i, timeWork)
 	}
-}
-
-func (x *QemuCommand) Execute(args []string) error {
-	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 60 * time.Second)
-	/* XXX: give the process a chance to terminate. Proper waiting is
-	 *  required here
-	 */
-	defer cancel()
-
-	go qemu_run(ctx, cancel)
+	fmt.Println("--------------------------------------------------------")
 
 	var connection SshConnection
+
+	// FIX ME FIRST COMMECTION FOR KNOWN HOSTS
 
 	for i := 0; i < opts.CCountVM; i++ {
 		err := connection.Init(ctx, opts.CPort + i)
 		if err != nil {
-			return fmt.Errorf("connection to VM on address[%d] failed: %w", opts.CPort + i, err)
+			fmt.Println("connection to VM on address failed:", opts.CPort + i, err)
 		}
 	}
+
+}
+
+func (x *QemuCommand) Execute(args []string) error {
+	ctx := context.Background()
+	ctxVM, cancel := context.WithTimeout(ctx, 60 * time.Minute)
+	defer cancel()
+
+	CreateQemuVM(ctxVM, cancel, 60 * time.Minute)
+
+	//need waiting system
 
 	return nil
 }
