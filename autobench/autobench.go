@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -68,6 +69,7 @@ func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, target
 
 // Execute FIO tests via ssh
 func (x *FioParametrs) Execute(args []string) error {
+	ctx := context.Background()
 	var fioOptions = mkconfig.FioOptions{}
 
 	err := fioOptions.Operations.Set(fioCmd.OpType)
@@ -98,8 +100,16 @@ func (x *FioParametrs) Execute(args []string) error {
 		fioOptions.CheckSumm = fioCmd.CheckSumm
 	}
 
+	var countTests = mkconfig.CountTests(fioOptions)
+	const bufferTime = 5 * time.Minute
+	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
+	fmt.Println("Total waiting time before the end of the test:", totalTime)
+
+
 	if fioCmd.Target == "qemu" {
-		go qemu_command.Execute(args)
+		ctxVM, cancel := context.WithTimeout(ctx, totalTime)
+		defer cancel()
+		go CreateQemuVM(ctxVM, cancel, totalTime)
 	}
 	time.Sleep(1 * time.Minute) // For waiting create VM
 
@@ -109,10 +119,7 @@ func (x *FioParametrs) Execute(args []string) error {
 	}
 
 	// Heartbeat
-	var countTests = mkconfig.CountTests(fioOptions)
-	const bufferTime = 5 * time.Minute
-	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
-	fmt.Println("Total waiting time before the end of the test:", totalTime)
+
 
 	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
