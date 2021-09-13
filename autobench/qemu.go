@@ -181,6 +181,8 @@ func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.
 		err := connection.Init(ctx, opts.CPort + i)
 		if err != nil {
 			fmt.Println("connection to VM on address failed:", opts.CPort + i, err)
+		} else {
+			break
 		}
 	}
 

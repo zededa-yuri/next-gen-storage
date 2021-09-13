@@ -109,13 +109,14 @@ func (x *FioParametrs) Execute(args []string) error {
 	if fioCmd.Target == "qemu" {
 		ctxVM, cancel := context.WithTimeout(ctx, totalTime)
 		defer cancel()
-		go CreateQemuVM(ctxVM, cancel, totalTime)
+		CreateQemuVM(ctxVM, cancel, totalTime)
 	}
-	time.Sleep(1 * time.Minute) // For waiting create VM
+	//	time.Sleep(1 * time.Minute) // For waiting create VM
 
+	fmt.Printf("starting fio on %d macnines\n", opts.CCountVM)
 	for i := 0; i < opts.CCountVM; i++ {
-		time.Sleep(5 * time.Second) // For create new folder for new test
 		go fio(opts.CPort + i, fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second)
+		time.Sleep(5 * time.Second) // For create new folder for new test
 	}
 
 	// Heartbeat
