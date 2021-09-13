@@ -106,10 +106,13 @@ func (x *FioParametrs) Execute(args []string) error {
 	fmt.Println("Total waiting time before the end of the test:", totalTime)
 
 
+	var target Target
 	if fioCmd.Target == "qemu" {
 		ctxVM, cancel := context.WithTimeout(ctx, totalTime)
 		defer cancel()
-		CreateQemuVM(ctxVM, cancel, totalTime)
+
+		target = new(TargetQemu)
+		target.init(ctxVM, cancel, totalTime)
 	}
 	//	time.Sleep(1 * time.Minute) // For waiting create VM
 

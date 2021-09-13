@@ -153,7 +153,16 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir stri
 	}
 }
 
-func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration) {
+type Target interface {
+	init(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration)
+	RunCommand(command string, foreground bool) error
+}
+
+type TargetQemu struct {
+	connection SshConnection
+}
+
+func (qemu *TargetQemu) init(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration) {
 	template_args := VmConfig{}
 	template_args.FileLocation = qemu_command.CFileLocation
 	template_args.Format = qemu_command.CFormat
@@ -173,12 +182,10 @@ func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.
 	}
 	fmt.Println("--------------------------------------------------------")
 
-	var connection SshConnection
-
 	// FIX ME FIRST COMMECTION FOR KNOWN HOSTS
 
 	for i := 0; i < opts.CCountVM; i++ {
-		err := connection.Init(ctx, opts.CPort + i)
+		err := qemu.connection.Init(ctx, opts.CPort + i)
 		if err != nil {
 			fmt.Println("connection to VM on address failed:", opts.CPort + i, err)
 		} else {
@@ -188,12 +195,18 @@ func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.
 
 }
 
+func (qemu *TargetQemu) RunCommand(command string, foreground bool) error {
+	/* TODO */
+	return nil
+}
+
 func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
 	ctxVM, cancel := context.WithTimeout(ctx, 60 * time.Minute)
 	defer cancel()
 
-	CreateQemuVM(ctxVM, cancel, 60 * time.Minute)
+	qemu := TargetQemu{}
+	qemu.init(ctxVM, cancel, 60 * time.Minute)
 
 	//need waiting system
 
