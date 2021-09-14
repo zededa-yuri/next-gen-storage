@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+
+	//	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"golang.org/x/crypto/ssh"
-	kh "golang.org/x/crypto/ssh/knownhosts"
 )
 
 
@@ -24,15 +24,29 @@ type QemuCommand struct {
 	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus 			string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
 	CMemory			string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
+	CPassword		string `short:"x" long:"password" description:"Format options " default:"asdfqwer"`
 }
 
 var qemu_command QemuCommand
+
 type VmConfig struct {
 	FileLocation 	string // default "bionic-server-cloudimg-i386.img"
 	Format 			string // default "raw"
 	VCpus 			string // default "2"
 	Memory 			string // default "512"
 	Kernel 			string // default ""
+	Password		string // default "asdfqwer"
+}
+
+type Vm struct {
+	ctx context.Context
+	cancel context.CancelFunc
+	ssh *ssh.Client
+	timeOut time.Duration
+	ip string
+	port int
+	status bool
+	imgpath string
 }
 
 func write_main_config(path string, template_args VmConfig) error {
@@ -66,37 +80,18 @@ type SshConnection struct {
 }
 
 func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
-	home := os.Getenv("HOME")
-	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
-	log.Printf("Loading keyfile %s\n----------------------------\n", key_path)
-	key, err := ioutil.ReadFile(key_path)
-	if err != nil {
-		log.Fatalf("unable to read private key: %v", err)
-	}
-
-	// Create the Signer for this private key.
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		log.Fatalf("unable to parse private key: %v", err)
-	}
-
-	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
-	hostKeyCallback, err := kh.New(known_hosts_path)
-	if err != nil {
-		log.Fatal("could not create hostkeycallback function: ", err)
-	}
+	var err error
 
 	config := &ssh.ClientConfig{
 		User: "ubuntu",
 		Auth: []ssh.AuthMethod{
 			// Use the PublicKeys method for remote authentication.
-			ssh.PublicKeys(signer),
+			//ssh.PublicKeys(signer),
+			ssh.Password("asdfqwer"),
 		},
-		HostKeyCallback: hostKeyCallback,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
-
-	time.Sleep(3 * time.Second) // For waiting create VM
 	for i := 0; i < 30; i++ {
 		_, err := ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
 		if err != nil {
@@ -128,12 +123,25 @@ func get_self_path() (string) {
 	return filepath.Dir(ex)
 }
 
+
+func Exists(filename string) bool {
+    if _, err := os.Stat(filename); err != nil {
+        if os.IsNotExist(err) {
+            return false
+        }
+    }
+    return true
+}
+
 func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir string, port int) {
 
 	cmd := exec.CommandContext(ctx,
 		"qemu-system-x86_64",
+		"-hda", "bionic-server-cloudimg-i386.img",
+		"-cpu", "host",
 		"-readconfig",  qemuConfigDir,
 		"-display", "none",
+		"-drive", "file=user-data.img,format=raw",
 		"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", port),
 		"-serial", "chardev:ch0")
 
@@ -153,19 +161,19 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir stri
 	}
 }
 
-func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration) {
+func (x *QemuCommand) CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration, args []string) {
 	template_args := VmConfig{}
 	template_args.FileLocation = qemu_command.CFileLocation
 	template_args.Format = qemu_command.CFormat
 	template_args.VCpus = qemu_command.CVCpus
 	template_args.Memory = qemu_command.CMemory
+	template_args.Password = qemu_command.CPassword
 
 	qemuConfigDir := filepath.Join(get_self_path(), "qemu.cfg")
 	err := write_main_config(qemuConfigDir, template_args)
 	if err != nil {
 		return
 	}
-
 
 	for i := 0; i < opts.CCountVM; i++ {
 		go qemu_run(ctx, cancel, qemuConfigDir, opts.CPort + i)
@@ -175,8 +183,8 @@ func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.
 
 	var connection SshConnection
 
-	// FIX ME FIRST COMMECTION FOR KNOWN HOSTS
-
+	// FIX ME FIRST CONNECTION FOR KNOWN HOSTS
+	time.Sleep(3 * time.Second) // For waiting create VM
 	for i := 0; i < opts.CCountVM; i++ {
 		err := connection.Init(ctx, opts.CPort + i)
 		if err != nil {
@@ -190,8 +198,7 @@ func (x *QemuCommand) Execute(args []string) error {
 	ctx := context.Background()
 	ctxVM, cancel := context.WithTimeout(ctx, 60 * time.Minute)
 	defer cancel()
-
-	CreateQemuVM(ctxVM, cancel, 60 * time.Minute)
+	qemu_command.CreateQemuVM(ctxVM, cancel, 60 * time.Minute, args)
 
 	//need waiting system
 
