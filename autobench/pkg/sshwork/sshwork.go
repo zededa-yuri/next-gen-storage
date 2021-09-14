@@ -2,10 +2,12 @@ package sshwork
 
 import (
 	"fmt"
-	"os"
 	"io/ioutil"
-	"golang.org/x/crypto/ssh"
+	"os"
+
 	"github.com/pkg/sftp"
+	"golang.org/x/crypto/ssh"
+
 )
 
 // SendCommandSSH sends command

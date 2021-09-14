@@ -1,30 +1,6 @@
 package qemutmp
 
 const QemuConfTemplate = `
-[drive "hd"]
-  if = "none"
-  file = "{{.FileLocation}}"
-  format = "{{.Format}}"
-
-[device]
-  driver = "intel-iommu"
-  caching-mode = "on"
-
-[device "scsi"]
-  driver = "virtio-scsi-pci"
-  bus = "pcie.0"
-  addr = "0x7"
-
-[device]
-  driver = "scsi-hd"
-  drive = "hd"
-
-#[device]
-#  driver = "vhost-scsi-pci"
-#  wwpn = "naa.500140508c1f5e99"
-#  bus = "pcie.0"
-#  addr = "0x08"
-
 [rtc]
   base = "localtime"
   driftfix = "slew"
@@ -86,4 +62,8 @@ const QemuConfTemplate = `
   chardev = "charmonitor"
 `
 
-const qemuDiskTemplate = ``
+const QemuUserData = `#cloud-config
+password: "{{.Password}}"
+chpasswd: { expire: False }
+ssh_pwauth: True
+`
