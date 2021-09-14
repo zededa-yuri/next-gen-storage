@@ -72,6 +72,7 @@ func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, target
 func (x *FioParametrs) Execute(args []string) error {
 	ctx := context.Background()
 	var fioOptions = mkconfig.FioOptions{}
+	var virtM VMlist
 
 	err := fioOptions.Operations.Set(fioCmd.OpType)
 	if err != nil {
@@ -104,12 +105,14 @@ func (x *FioParametrs) Execute(args []string) error {
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
-	ctxVM, cancel := context.WithTimeout(ctx, totalTime)
-	defer cancel()
 
 	if fioCmd.Target == "qemu" {
-		go qemu_command.CreateQemuVM(ctxVM, cancel, totalTime, args)
+		err := virtM.AllocateVM(ctx, totalTime)
+		if err != nil {
+			return fmt.Errorf("VM create failed err:%v", err)
+		}
 	}
+
 	time.Sleep(30 * time.Second) // For waiting create VM
 
 	for i := 0; i < opts.CCountVM; i++ {
@@ -130,11 +133,16 @@ func (x *FioParametrs) Execute(args []string) error {
 			ticker.Stop()
 			break there
 		case <-testFailed:
-			cancel()
 			ticker.Stop()
 			break there
 		}
 	}
+
+	if fioCmd.Target == "qemu" {
+		fmt.Println("Free VM")
+		virtM.FreeVM(virtM)
+	}
+
 	return nil
 }
 
