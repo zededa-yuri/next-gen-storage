@@ -27,6 +27,7 @@ type QemuCommand struct {
 }
 
 var qemu_command QemuCommand
+var linkdefaultImage = "https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-i386.img"
 
 type VmConfig struct {
 	FileLocation 	string // default "bionic-server-cloudimg-i386.img"
@@ -84,16 +85,37 @@ func get_self_path() (string) {
 }
 
 
-func Exists(filename string) bool {
-    if _, err := os.Stat(filename); err != nil {
+func getVMImage(index int, filename, link string) (string, error) {
+    if _, err := os.Stat(filepath.Join(get_self_path(), filename)); err != nil {
         if os.IsNotExist(err) {
-            return false
+			return "", err
         }
     }
-    return true
+
+	defPathImg := filepath.Join(get_self_path(), filename)
+	if opts.CCountVM <=1 {
+		return defPathImg, nil
+	}
+
+	fPath := filepath.Join(get_self_path(), fmt.Sprintf("%d-%s", index, filename))
+	_, err := exec.Command("cp", defPathImg, fPath).CombinedOutput()
+	if err != nil {
+		fmt.Printf("Run command cp %s -> %s  failed: err %v", defPathImg, fPath, err)
+		return "", err
+	}
+
+	userDPathDef := filepath.Join(get_self_path(), "user-data.img")
+	userDPath := filepath.Join(get_self_path(), fmt.Sprintf("%d-%s", index, "user-data.img"))
+	_, err = exec.Command("cp", userDPathDef, userDPath).CombinedOutput()
+	if err != nil {
+		fmt.Printf("Run command cp %s -> %s  failed: err %v", userDPathDef, userDPath, err)
+		return "", err
+	}
+
+    return fPath, nil
 }
 
-func qemu_run(vm VirtM, qemuConfigDir string) {
+func qemuVmRun(vm VirtM, qemuConfigDir string) {
 	cmd := exec.CommandContext(vm.ctx,
 		"qemu-system-x86_64",
 		"-hda", vm.imgPath,
@@ -130,18 +152,20 @@ func (t* VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		return fmt.Errorf("create qemu config failed! err:%v", err)
 	}
 
+	log.Printf("Creating %d virtual macnines\n", opts.CCountVM)
+
 	for i := 0; i < opts.CCountVM; i++ {
 		var vm VirtM
 		vm.ctx, vm.cancel = context.WithTimeout(ctx, totalTime)
 		vm.port = opts.CPort + i
 		vm.timeOut = totalTime
+		vm.imgPath, err = getVMImage(i, qemu_command.CFileLocation, linkdefaultImage)
+		if err != nil {
+			return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, err)
+		}
 
-		//here need check file exists
-		vm.imgPath = filepath.Join(get_self_path(), "bionic-server-cloudimg-i386.img")
+		go qemuVmRun(vm, qemuConfigDir)
 
-		go qemu_run(vm, qemuConfigDir)
-
-		//SSH connection
 		config := &ssh.ClientConfig{
 			User: "ubuntu",
 			Auth: []ssh.AuthMethod{
@@ -182,16 +206,12 @@ func (t* VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 func (t* VMlist) FreeVM(vmList VMlist) {
 	if len(vmList) != 0 {
 		for _, vm := range vmList {
-			vm.cancel()
+			vm.cancel() //not work
 		}
 	}
 }
 
 func (x *QemuCommand) Execute(args []string) error {
-
-	//qemu_command.CreateQemuVM(ctxVM, cancel, 60 * time.Minute, args)
-
-	//need waiting system
 
 	return nil
 }

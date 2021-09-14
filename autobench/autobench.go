@@ -105,15 +105,16 @@ func (x *FioParametrs) Execute(args []string) error {
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
+	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
+	defer cancelVMS()
 
 	if fioCmd.Target == "qemu" {
-		err := virtM.AllocateVM(ctx, totalTime)
+		err := virtM.AllocateVM(ctxVMs, totalTime)
 		if err != nil {
+			cancelVMS()
 			return fmt.Errorf("VM create failed err:%v", err)
 		}
 	}
-
-	time.Sleep(30 * time.Second) // For waiting create VM
 
 	for i := 0; i < opts.CCountVM; i++ {
 		time.Sleep(5 * time.Second) // For create new folder for new test
