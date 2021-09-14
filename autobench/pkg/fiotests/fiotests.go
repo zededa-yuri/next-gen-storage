@@ -121,7 +121,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 			break there
 		case <- ticker.C:
 			if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
-				return fmt.Errorf("VM is fail. Test failed")
+				return fmt.Errorf("VM is fail. Test failed FIO process on VM not found")
 			}
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ", sshHost)
 		}
