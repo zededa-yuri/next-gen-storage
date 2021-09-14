@@ -28,7 +28,7 @@ type Options struct {
 
 type FioParametrs struct {
 	SSHhost string 				`short:"a" long:"adress" description:"ip:port for ssh connections." default:"127.0.0.1"`
-	SSHUser string 				`short:"u" long:"user" description:"A user name for ssh connections" default:"root"`
+	SSHUser string 				`short:"u" long:"user" description:"A user name for ssh connections" default:"ubuntu"`
 	TimeOneTest int 			`short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
 	OpType string				`short:"o" long:"optype" description:"Operation types I/O for fio config" default:"read,write"`
 	BlockSize string 			`short:"b" long:"bs" description:"Block size for fio config"  default:"4k,64k,1m"`
@@ -38,8 +38,9 @@ type FioParametrs struct {
 	TargetFIODevice string 		`short:"D" long:"targetdev" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
 	LocalFolderResults string 	`short:"f" long:"folder" description:"[Optional] A name of folder with tests results" default:"FIOTestsResults"`
 	LocalDirResults string 		`short:"p" long:"path" description:"[Optional] Path to directory with test results"`
-	Target string				`short:"T" long:"target" description:"Target for benchmark tests" default:"qemu"`
+	Target string				`short:"T" long:"target" description:"Target for benchmark tests"`
 }
+
 
 var fioCmd FioParametrs
 var opts Options
@@ -71,6 +72,7 @@ func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, target
 func (x *FioParametrs) Execute(args []string) error {
 	ctx := context.Background()
 	var fioOptions = mkconfig.FioOptions{}
+	var virtM VMlist
 
 	err := fioOptions.Operations.Set(fioCmd.OpType)
 	if err != nil {
@@ -103,15 +105,16 @@ func (x *FioParametrs) Execute(args []string) error {
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
-	fmt.Println("Total waiting time before the end of the test:", totalTime)
-
+	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
+	defer cancelVMS()
 
 	if fioCmd.Target == "qemu" {
-		ctxVM, cancel := context.WithTimeout(ctx, totalTime)
-		defer cancel()
-		go CreateQemuVM(ctxVM, cancel, totalTime)
+		err := virtM.AllocateVM(ctxVMs, totalTime)
+		if err != nil {
+			cancelVMS()
+			return fmt.Errorf("VM create failed err:%v", err)
+		}
 	}
-	time.Sleep(1 * time.Minute) // For waiting create VM
 
 	for i := 0; i < opts.CCountVM; i++ {
 		time.Sleep(5 * time.Second) // For create new folder for new test
@@ -119,8 +122,7 @@ func (x *FioParametrs) Execute(args []string) error {
 	}
 
 	// Heartbeat
-
-
+	fmt.Println("Total waiting time before the end of the test:", totalTime)
 	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -136,6 +138,12 @@ func (x *FioParametrs) Execute(args []string) error {
 			break there
 		}
 	}
+
+	if fioCmd.Target == "qemu" {
+		fmt.Println("Free VM")
+		virtM.FreeVM(virtM)
+	}
+
 	return nil
 }
 

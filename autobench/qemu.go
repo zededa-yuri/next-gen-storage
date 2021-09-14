@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+
+	//	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -14,9 +15,7 @@ import (
 
 	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"golang.org/x/crypto/ssh"
-	kh "golang.org/x/crypto/ssh/knownhosts"
 )
-
 
 type QemuCommand struct {
 	CQemuConfigDir 	string `short:"c" long:"config" description:"The option takes the path to the QEMU configuration file"`
@@ -24,16 +23,32 @@ type QemuCommand struct {
 	CFormat 		string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus 			string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
 	CMemory			string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
+	CPassword		string `short:"x" long:"password" description:"Format options " default:"asdfqwer"`
 }
 
 var qemu_command QemuCommand
+var linkdefaultImage = "https://cloud-images.ubuntu.com/bionic/current/bionic-server-cloudimg-i386.img"
+
 type VmConfig struct {
 	FileLocation 	string // default "bionic-server-cloudimg-i386.img"
 	Format 			string // default "raw"
 	VCpus 			string // default "2"
 	Memory 			string // default "512"
 	Kernel 			string // default ""
+	Password		string // default "asdfqwer"
 }
+
+type VirtM struct {
+	ctx 		context.Context
+	cancel 		context.CancelFunc
+	sshClient 	*ssh.Client
+	timeOut 	time.Duration
+	port 		int
+	status 		bool
+	imgPath 	string
+}
+
+type VMlist []VirtM
 
 func write_main_config(path string, template_args VmConfig) error {
 	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
@@ -61,65 +76,6 @@ func write_main_config(path string, template_args VmConfig) error {
 	return nil
 }
 
-type SshConnection struct {
-	//client *ssh.Client
-}
-
-func (connection SshConnection) Init(ctx context.Context, ssHport int) error {
-	home := os.Getenv("HOME")
-	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
-	log.Printf("Loading keyfile %s\n----------------------------\n", key_path)
-	key, err := ioutil.ReadFile(key_path)
-	if err != nil {
-		log.Fatalf("unable to read private key: %v", err)
-	}
-
-	// Create the Signer for this private key.
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		log.Fatalf("unable to parse private key: %v", err)
-	}
-
-	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
-	hostKeyCallback, err := kh.New(known_hosts_path)
-	if err != nil {
-		log.Fatal("could not create hostkeycallback function: ", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User: "ubuntu",
-		Auth: []ssh.AuthMethod{
-			// Use the PublicKeys method for remote authentication.
-			ssh.PublicKeys(signer),
-		},
-		HostKeyCallback: hostKeyCallback,
-	}
-
-
-	time.Sleep(3 * time.Second) // For waiting create VM
-	for i := 0; i < 30; i++ {
-		_, err := ssh.Dial("tcp", fmt.Sprintf("localhost:%d", ssHport), config)
-		if err != nil {
-			log.Printf("Unable to connect: 127.0.0.1:%d err:%v", ssHport, err)
-		} else {
-			log.Printf("Connection to: 127.0.0.1:%d was successful", ssHport)
-			break
-		}
-
-		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-			return ctx.Err()
-		}
-		time.Sleep(3 * time.Second)
-	}
-
-	if err != nil {
-		log.Printf("failed to establish connection after serveral attempts\n")
-		return err
-	}
-	// Connect to the remote server and perform the SSH handshake.
-	return nil
-}
-
 func get_self_path() (string) {
 	ex, err := os.Executable()
 	if err != nil {
@@ -128,13 +84,46 @@ func get_self_path() (string) {
 	return filepath.Dir(ex)
 }
 
-func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir string, port int) {
 
-	cmd := exec.CommandContext(ctx,
+func getVMImage(index int, filename, link string) (string, error) {
+    if _, err := os.Stat(filepath.Join(get_self_path(), filename)); err != nil {
+        if os.IsNotExist(err) {
+			return "", err
+        }
+    }
+
+	defPathImg := filepath.Join(get_self_path(), filename)
+	if opts.CCountVM <=1 {
+		return defPathImg, nil
+	}
+
+	fPath := filepath.Join(get_self_path(), fmt.Sprintf("%d-%s", index, filename))
+	_, err := exec.Command("cp", defPathImg, fPath).CombinedOutput()
+	if err != nil {
+		fmt.Printf("Run command cp %s -> %s  failed: err %v", defPathImg, fPath, err)
+		return "", err
+	}
+
+	userDPathDef := filepath.Join(get_self_path(), "user-data.img")
+	userDPath := filepath.Join(get_self_path(), fmt.Sprintf("%d-%s", index, "user-data.img"))
+	_, err = exec.Command("cp", userDPathDef, userDPath).CombinedOutput()
+	if err != nil {
+		fmt.Printf("Run command cp %s -> %s  failed: err %v", userDPathDef, userDPath, err)
+		return "", err
+	}
+
+    return fPath, nil
+}
+
+func qemuVmRun(vm VirtM, qemuConfigDir string) {
+	cmd := exec.CommandContext(vm.ctx,
 		"qemu-system-x86_64",
+		"-hda", vm.imgPath,
+		"-cpu", "host",
 		"-readconfig",  qemuConfigDir,
 		"-display", "none",
-		"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", port),
+		"-drive", "file=user-data.img,format=raw",
+		"-device", "e1000,netdev=net0",  "-netdev",  fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
 		"-serial", "chardev:ch0")
 
 	var out bytes.Buffer
@@ -142,58 +131,87 @@ func qemu_run(ctx context.Context, cancel context.CancelFunc, qemuConfigDir stri
 	cmd.Stderr = &out
 
 	err := cmd.Run() //no have end for this command
-	if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
-		fmt.Printf("Cancelled via timer: %v\n", ctx.Err())
-		return
-	} else if err != nil {
-		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out)
-		cancel()
-	} else {
-		cancel()
+	if err != nil {
+		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, vm.ctx.Err(), out)
 	}
+	vm.cancel()
 }
 
-func CreateQemuVM(ctx context.Context, cancel context.CancelFunc, timeWork time.Duration) {
+func (t* VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
+	*t = []VirtM{}
 	template_args := VmConfig{}
 	template_args.FileLocation = qemu_command.CFileLocation
 	template_args.Format = qemu_command.CFormat
 	template_args.VCpus = qemu_command.CVCpus
 	template_args.Memory = qemu_command.CMemory
+	template_args.Password = qemu_command.CPassword
 
 	qemuConfigDir := filepath.Join(get_self_path(), "qemu.cfg")
 	err := write_main_config(qemuConfigDir, template_args)
 	if err != nil {
-		return
+		return fmt.Errorf("create qemu config failed! err:%v", err)
 	}
 
+	log.Printf("Creating %d virtual macnines\n", opts.CCountVM)
 
 	for i := 0; i < opts.CCountVM; i++ {
-		go qemu_run(ctx, cancel, qemuConfigDir, opts.CPort + i)
-		log.Printf("Create VM by the address [localhost:%d] with limit time in %v\n", opts.CPort + i, timeWork)
-	}
-	fmt.Println("--------------------------------------------------------")
-
-	var connection SshConnection
-
-	// FIX ME FIRST COMMECTION FOR KNOWN HOSTS
-
-	for i := 0; i < opts.CCountVM; i++ {
-		err := connection.Init(ctx, opts.CPort + i)
+		var vm VirtM
+		vm.ctx, vm.cancel = context.WithTimeout(ctx, totalTime)
+		vm.port = opts.CPort + i
+		vm.timeOut = totalTime
+		vm.imgPath, err = getVMImage(i, qemu_command.CFileLocation, linkdefaultImage)
 		if err != nil {
-			fmt.Println("connection to VM on address failed:", opts.CPort + i, err)
+			return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, err)
+		}
+
+		go qemuVmRun(vm, qemuConfigDir)
+
+		config := &ssh.ClientConfig{
+			User: "ubuntu",
+			Auth: []ssh.AuthMethod{
+				ssh.Password(qemu_command.CPassword),
+			},
+			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		}
+
+		for i := 0; i < 30; i++ {
+			vm.sshClient, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", vm.port), config)
+			if err != nil {
+				log.Printf("Unable to connect: localhost:%d err:%v", vm.port, err)
+			} else {
+				log.Printf("Connection to: localhost:%d was successful", vm.port)
+				vm.status = true
+				break
+			}
+			if vm.ctx.Err() == context.Canceled || vm.ctx.Err() == context.DeadlineExceeded {
+				return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, vm.ctx.Err())
+			}
+			time.Sleep(3 * time.Second)
+		}
+
+		if err != nil {
+			vm.cancel()
+			for _, vmo := range *t {
+				vmo.cancel()
+			}
+			return fmt.Errorf("create VM with adress localhost:%d failed! err:%v", vm.port, err)
+		}
+
+		*t = append(*t, vm) //update list with VM
+	}
+
+	return nil
+}
+
+func (t* VMlist) FreeVM(vmList VMlist) {
+	if len(vmList) != 0 {
+		for _, vm := range vmList {
+			vm.cancel() //not work
 		}
 	}
-
 }
 
 func (x *QemuCommand) Execute(args []string) error {
-	ctx := context.Background()
-	ctxVM, cancel := context.WithTimeout(ctx, 60 * time.Minute)
-	defer cancel()
-
-	CreateQemuVM(ctxVM, cancel, 60 * time.Minute)
-
-	//need waiting system
 
 	return nil
 }

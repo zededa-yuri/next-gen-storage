@@ -197,7 +197,7 @@ func GenerateFIOConfig(
 	var sTime = fmt.Sprintf("%d", int64(runtime.Round(time.Second).Seconds()))
 
 	var countTests = CountTests(cfg)
-	ftPath := filepath.Join("/users/", sshUser, "/fio.test.file")
+	ftPath := filepath.Join("/home/", sshUser, "/fio.test.file")
 	if targetDevice != "" {
 		ftPath = targetDevice
 	}

@@ -2,8 +2,6 @@ package fiotests
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,37 +11,17 @@ import (
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/sshwork"
 	"golang.org/x/crypto/ssh"
-	kh "golang.org/x/crypto/ssh/knownhosts"
 )
 
 
 func SshConnect(ip, user string) (*ssh.Client, error) {
-	home := os.Getenv("HOME")
-	key_path := fmt.Sprintf("%s/.ssh/id_rsa", home)
-
-	log.Printf("Loading keyfile %s\n", key_path)
-	key, err := ioutil.ReadFile(key_path)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read private key: %w", err)
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse private key: %w", err)
-	}
-
-	known_hosts_path := fmt.Sprintf("%s/.ssh/known_hosts", home)
-	hostKeyCallback, err := kh.New(known_hosts_path)
-	if err != nil {
-		return nil, fmt.Errorf("could not create hostkeycallback function: %w", err)
-	}
-
 	config := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
-			ssh.PublicKeys(signer),
+			//ssh.PublicKeys(signer),
+			ssh.Password("asdfqwer"),
 		},
-		HostKeyCallback: hostKeyCallback,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	}
 
 	// Connect to the remote server and perform the SSH handshake.
@@ -95,7 +73,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser, targetDevice)
 
 	// Create folder on VM
-	remoteResultsAbsDir := filepath.Join("/users/", sshUser, "/FIO" + curentDate)
+	remoteResultsAbsDir := filepath.Join("/home/", sshUser, "/FIO" + curentDate)
 	if err := sshwork.SendCommandSSH(
 		client,
 		fmt.Sprintf("mkdir %s", remoteResultsAbsDir),
@@ -143,7 +121,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 			break there
 		case <- ticker.C:
 			if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
-				return fmt.Errorf("VM is fail. Test failed")
+				return fmt.Errorf("VM is fail. Test failed FIO process on VM not found")
 			}
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ", sshHost)
 		}
