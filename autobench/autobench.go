@@ -106,7 +106,6 @@ func (x *FioParametrs) Execute(args []string) error {
 	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(60 * time.Second) + int64(bufferTime))
 	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
-	defer cancelVMS()
 
 	if fioCmd.Target == "qemu" {
 		err := virtM.AllocateVM(ctxVMs, totalTime)
@@ -143,7 +142,7 @@ func (x *FioParametrs) Execute(args []string) error {
 		fmt.Println("Free VM")
 		virtM.FreeVM(virtM)
 	}
-
+	cancelVMS()
 	return nil
 }
 
