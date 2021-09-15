@@ -68,6 +68,13 @@ func fio(port int, sshHost, sshUser, localResultsFolder, localDirResults, target
 	}
 }
 
+func fioLocal(sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) {
+	if err := fiotests.RunFIOTestLocal(sshUser, localResultsFolder, localDirResults, targetDevice, fioOptions, fioTestTime); err != nil {
+		log.Printf("FIO local tests failed: error: %v", err)
+		testFailed <- true
+	}
+}
+
 // Execute FIO tests via ssh
 func (x *FioParametrs) Execute(args []string) error {
 	ctx := context.Background()
@@ -113,13 +120,15 @@ func (x *FioParametrs) Execute(args []string) error {
 			cancelVMS()
 			return fmt.Errorf("VM create failed err:%v", err)
 		}
-	}
 
-	for i := 0; i < opts.CCountVM; i++ {
-		time.Sleep(5 * time.Second) // For create new folder for new test
-		go fio(opts.CPort + i, fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second)
-	}
+		for i := 0; i < opts.CCountVM; i++ {
+			time.Sleep(5 * time.Second) // For create new folder for new test
+			go fio(opts.CPort + i, fioCmd.SSHhost, fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, 60 * time.Second)
+		}
 
+	} else if fioCmd.Target == "local" {
+		go fioLocal(fioCmd.SSHUser, fioCmd.LocalFolderResults, fioCmd.LocalDirResults, fioCmd.TargetFIODevice, fioOptions, totalTime)
+	}
 	// Heartbeat
 	fmt.Println("Total waiting time before the end of the test:", totalTime)
 	timerTomeOut := time.After(totalTime)
