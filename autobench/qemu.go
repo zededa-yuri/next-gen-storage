@@ -118,7 +118,6 @@ func getVMImage(index int, filename string) (string, error) {
 func qemuVmRun(vm VirtM, qemuConfigDir string) {
 	cmd := exec.CommandContext(vm.ctx,
 		"qemu-system-x86_64",
-		"-hda", vm.imgPath,
 		"-cpu", "host",
 		"-readconfig",  qemuConfigDir,
 		"-display", "none",

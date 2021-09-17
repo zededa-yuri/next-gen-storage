@@ -206,13 +206,9 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
 
 	go func() {
-		_, err := exec.Command("fio",
-								filepath.Join(localResultsAbsDir, "/fio_config.cfg"),
-								"--output-format=normal,json", ">",
-								filepath.Join(localResultsAbsDir, "/result.json"),
-								"&").CombinedOutput()
+		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"), "--output-format=normal,json", ">", filepath.Join(localResultsAbsDir, "/result.json")).CombinedOutput()
 		if err != nil {
-			fmt.Println("Failed to FIO RUN! ", err)
+			fmt.Println("Failed to exec FIO command! ", err)
 		}
 	}()
 
