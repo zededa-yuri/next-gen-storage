@@ -6,7 +6,7 @@ This pkg convert json result from FIO in CSV table
 
 Use this function to convert
 
-```code
+```go
 func ConvertJSONtoCSV(inputFile, outputFile string)
 ```
 
@@ -16,7 +16,7 @@ This pkg generate config for FIO util
 
 Use this function to generate:
 
-```code
+```go
 func GenerateFIOConfig(fType []OperationType, fBS []BlockSize, fJobs []JobsType, fDepth []DepthType, fTime time.Duration, outPath, SshUser string)
 ```
 
@@ -26,7 +26,7 @@ The package provides functionality for working with ssh and transferring files v
 
 Use this functions for work:
 
-```code
+```go
 func SendCommandSSH(conn *ssh.Client, command string, foreground bool)
 func SendFileSCP(conn *ssh.Client, localPath, remotePath string)
 func GetFileSCP(conn *ssh.Client, localPath, remotePath string)
@@ -38,6 +38,6 @@ The package provides functionality for running FIO tests via ssh client
 
 Use this functions for work:
 
-```code
+```go
 func RunFIOTest(sshHost, sshUser, localResultsDir string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration)
 ```
