@@ -13,43 +13,8 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-
-func SshConnect(ip, user string) (*ssh.Client, error) {
-	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			//ssh.PublicKeys(signer),
-			ssh.Password("asdfqwer"),
-		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	// Connect to the remote server and perform the SSH handshake.
-	client, err := ssh.Dial("tcp", ip, config)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect: %w", err)
-	}
-	return client, nil
-}
-
-func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
+func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
 	curentDate := fmt.Sprintf(time.Now().Format("2006-01-02-15:04:05"))
-	// Get ssh client
-	client, err := SshConnect(sshHost, sshUser)
-	if err != nil {
-		return fmt.Errorf("unable to connect: %v", err)
-	}
-	defer client.Close()
-
-	// Install tools on remote VM [!WE NEED SUDO PRIVILEGES HERE]
-	if err := sshwork.SendCommandSSH(
-		client,
-		"apt-get update && apt-get install -y fio git lshw sysstat",
-		true, // sshwork.Foreground - true | sshwork.Background - false
-	); err != nil {
-		// Not critical
-		//return fmt.Errorf("couldnot install tools on VM(maybe we need sudo): %w", err)
-	}
 
 	ex, err := os.Executable()
 	if err != nil {
@@ -123,7 +88,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 			if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
 				return fmt.Errorf("VM is fail. Test failed FIO process on VM not found")
 			}
-			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ", sshHost)
+			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ")
 		}
 	}
 
@@ -134,7 +99,7 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 		filepath.Join(localResultsAbsDir, "/result.json"),
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	); err != nil {
-		return fmt.Errorf("Could not get result.json file from VM: %w", err)
+		return fmt.Errorf("could not get result.json file from VM: %w", err)
 	}
 
 	// Download remote dmesg reults
@@ -154,7 +119,9 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	}
 
 	// Save local dmesg file
-	out, err := exec.Command("cp", "/var/log/dmesg", filepath.Join(localResultsAbsDir, "/host_dmesg")).CombinedOutput()
+	out, err := exec.Command("cp", "/var/log/dmesg",
+							filepath.Join(localResultsAbsDir, "/host_dmesg"),
+							).CombinedOutput()
 	if err != nil {
 		fmt.Println("Copying local dmesg file with logs failed! ", err, out)
 	}
@@ -176,7 +143,8 @@ func RunFIOTest(sshHost, sshUser, localResultsFolder, localDirResults, targetDev
 	return nil
 }
 
-func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
+func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice string,
+					fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
 	curentDate := fmt.Sprintf(time.Now().Format("2006-01-02-15:04:05"))
 
 	ex, err := os.Executable()
@@ -206,7 +174,10 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
 
 	go func() {
-		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"), "--output-format=normal,json", ">", filepath.Join(localResultsAbsDir, "/result.json")).CombinedOutput()
+		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"),
+								"--output-format=normal,json", ">>",
+								filepath.Join(localResultsAbsDir,
+								"/result.json")).CombinedOutput()
 		if err != nil {
 			fmt.Println("Failed to exec FIO command! ", err)
 		}
@@ -226,10 +197,14 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 		case <- ticker.C:
 			_, err := exec.Command("pgrep", "fio").CombinedOutput()
 			if err != nil {
-				fmt.Println("Test failed FIO process on VM not found! ", err)
+				fmt.Println("Test failed! FIO process on local machine not found! ", err)
+				break there
 			}
 			fmt.Println("Checking... Nothing broken yet. Let's wait a bit. ")
 		}
+	}
+	if err != nil {
+		return fmt.Errorf("FIO test failed: %w", err)
 	}
 
 	if err := fioconv.ConvertJSONtoCSV(
