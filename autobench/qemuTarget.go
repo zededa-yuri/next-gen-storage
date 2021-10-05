@@ -86,7 +86,7 @@ func getSelfPath() string {
 }
 
 func getVMImage(index int, filename string) (string, error) {
-	if _, err := os.Stat(filepath.Join(getSelfPath(), filename)); err != nil {
+	if _, err := os.Stat(filename); err != nil {
 		if os.IsNotExist(err) {
 			return "", err
 		}
@@ -104,9 +104,10 @@ func getVMImage(index int, filename string) (string, error) {
 		return "", err
 	}
 
-	userDPathDef := filepath.Join(getSelfPath(), "user-data.img")
+	userDPathDef := "user-data.img"
 	userDPath := filepath.Join(getSelfPath(), fmt.Sprintf("%d-%s", index, "user-data.img"))
 	_, err = exec.Command("cp", userDPathDef, userDPath).CombinedOutput()
+	log.Printf("copy to %s\n", userDPath)
 	if err != nil {
 		fmt.Printf("Run command cp %s -> %s  failed: err %v", userDPathDef, userDPath, err)
 		return "", err
@@ -158,7 +159,7 @@ func (t VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
 		vm.ctx, vm.cancel = context.WithTimeout(ctx, totalTime)
 		vm.port = qemuCmd.CPort + i
 		vm.timeOut = totalTime
-		vm.userImg = filepath.Join(getSelfPath(), "user-data.img")
+		vm.userImg = "user-data.img"
 		vm.imgPath, err = getVMImage(i, qemuCmd.CFileLocation)
 		if err != nil {
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, err)
