@@ -122,7 +122,7 @@ func qemuVmRun(vm VirtM, qemuConfigDir string) {
 		"-cpu", "host",
 		"-readconfig", qemuConfigDir,
 		"-display", "none",
-		"-drive", fmt.Sprintf("file=%s,format=raw", vm.userImg),
+		"-cdrom", vm.userImg,
 		"-device", "e1000,netdev=net0", "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
 		"-serial", "chardev:ch0")
 
