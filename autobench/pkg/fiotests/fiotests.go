@@ -44,7 +44,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		fmt.Sprintf("mkdir %s", remoteResultsAbsDir),
 		true, // sshwork.Foreground - true | sshwork.Background - false
 	); err != nil {
-		return fmt.Errorf("couldnot install tools on VM: %w", err)
+		return fmt.Errorf("unable to create directory %s on VM: %w", remoteResultsAbsDir, err)
 	}
 
 	if err := sshwork.SendFileSCP(
