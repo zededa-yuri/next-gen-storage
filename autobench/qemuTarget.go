@@ -121,7 +121,7 @@ func qemuVmRun(vm VirtM, qemuConfigDir string) {
 		"-cpu", "host",
 		"-readconfig", qemuConfigDir,
 		"-display", "none",
-		"-drive", fmt.Sprintf("file=%s,format=raw", vm.userImg),
+		"-cdrom", vm.userImg,
 		"-device", "e1000,netdev=net0", "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
 		"-serial", "chardev:ch0")
 
@@ -136,7 +136,7 @@ func qemuVmRun(vm VirtM, qemuConfigDir string) {
 	vm.cancel()
 }
 
-func (t VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
+func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
 	templateArgs := VmConfig{
 		FileLocation: qemuCmd.CFileLocation,
 		Format:       qemuCmd.CFormat,
@@ -195,13 +195,13 @@ func (t VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
 
 		if err != nil {
 			vm.cancel()
-			for _, vmo := range t {
+			for _, vmo := range *t {
 				vmo.cancel()
 			}
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:%v", vm.port, err)
 		}
 
-		t = append(t, &vm) // update list with VM
+		*t = append(*t, &vm)
 	}
 
 	return nil
@@ -210,7 +210,7 @@ func (t VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
 func (t VMlist) FreeVM() {
 	for _, vm := range t {
 		vm.sshClient.Close()
-		vm.cancel() // isn't work (need to test again)
+		vm.cancel()
 	}
 }
 
