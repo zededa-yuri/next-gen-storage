@@ -202,7 +202,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:%v", vm.port, err)
 		}
 
-		*t = append(*t, &vm) // update list with VM
+		*t = append(*t, &vm)
 	}
 
 	return nil
@@ -211,7 +211,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 func (t VMlist) FreeVM() {
 	for _, vm := range t {
 		vm.sshClient.Close()
-		vm.cancel() // isn't work (need to test again)
+		vm.cancel()
 	}
 }
 
