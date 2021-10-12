@@ -14,11 +14,11 @@ const QemuConfTemplate = `
   driver = "scsi-hd"
   drive = "hd"
 
-#[device]
-#  driver = "vhost-scsi-pci"
-#  wwpn = "naa.500140508c1f5e99"
-#  bus = "pcie.0"
-#  addr = "0x08"
+[device]
+  driver = "vhost-scsi-pci"
+  wwpn = "{{.VhostWWPN}}"
+  bus = "pcie.0"
+  addr = "0x08"
 
 [rtc]
   base = "localtime"
