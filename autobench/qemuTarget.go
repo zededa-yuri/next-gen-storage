@@ -335,8 +335,20 @@ func SetupDiskZfs(ctx context.Context, target string) error {
 	if err != nil {
 		return fmt.Errorf("failed creating zfs pool: %v", err)
 	}
+	pool.Close()
 
-	defer pool.Close()
+	props := make(map[zfs.Prop]zfs.Property)
+	strSize := fmt.Sprintf("%d", 1024*1024*1024*60)
+	props[zfs.DatasetPropVolsize] = zfs.Property{Value: strSize}
+	props[zfs.DatasetPropVolblocksize] = zfs.Property{Value: fmt.Sprintf("%d", 16*1024)}
+	props[zfs.DatasetPropReservation] = zfs.Property{Value: strSize}
+
+	dataset, err := zfs.DatasetCreate("tank/test-zvol", zfs.DatasetTypeVolume, props)
+	if err != nil {
+		return fmt.Errorf("Failed to create zvol: %w", err)
+	}
+	defer dataset.Close()
+
 	return nil
 }
 
