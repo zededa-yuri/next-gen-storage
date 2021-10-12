@@ -16,6 +16,7 @@ import (
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"golang.org/x/crypto/ssh"
+	zfs "github.com/bicomsystems/go-libzfs"
 )
 
 type QemuCommand struct {
@@ -273,6 +274,28 @@ func fio(virt *VirtM, localResultsFolder,
 	log.Printf("Test on a VM with port: %d finished! Wait for VM to complete.", virt.port)
 }
 
+func SetupDiskZfs(ctx context.Context, target string) error {
+	/* TODO: use go-libzfs package to create pool */
+	cmd := exec.Command("zpool",
+		"create",
+		"tank",
+		"-f",
+		target)
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed creating zfs pool: %v", err)
+	}
+
+	pool, err := zfs.PoolOpen("tank")
+	if err != nil {
+		return fmt.Errorf("failed creating zfs pool: %v", err)
+	}
+
+	defer pool.Close()
+	return nil
+}
+
 func RunCommand(ctx context.Context, virtM VMlist) error {
 	err := InitFioOptions()
 	if err != nil {
@@ -283,6 +306,12 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	const bufferTime = 3 * time.Minute
 	var totalTime = time.Duration(int64(countTests)*int64(60*time.Second) + int64(bufferTime))
 	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
+
+	err = SetupDiskZfs(ctxVMs, opts.TargetDisk)
+	if err != nil {
+		cancelVMS()
+		return fmt.Errorf("Can't setup disk %s:%v", opts.TargetDisk, err)
+	}
 
 	err = virtM.AllocateVM(ctxVMs, totalTime)
 	if err != nil {
