@@ -17,7 +17,8 @@ type Options struct {
 	Jobs               string `short:"j" long:"jobs" description:"Jobs for fio config" default:"1,8"`
 	TargetFIODevice    string `short:"D" long:"targetdev" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
 	LocalFolderResults string `short:"f" long:"folder" description:"[Optional] A name of folder with tests results" default:"FIOTestsResults"`
-	LocalDirResults    string `short:"l" long:"localpath" description:"[Optional] Path to existing directory with test results"`
+	LocalDirResults    string `short:"l" long:"localpath" description:"[Optional] Path to directory with test results"`
+	TargetDisk         string `long:"target-disk" description:"Physical device run the tests on"`
 }
 
 var opts Options
