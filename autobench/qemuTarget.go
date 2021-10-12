@@ -318,6 +318,28 @@ func SetupDiskZfs(ctx context.Context, target string) error {
 	return nil
 }
 
+func SetupDiskZfs(ctx context.Context, target string) error {
+	/* TODO: use go-libzfs package to create pool */
+	cmd := exec.Command("zpool",
+		"create",
+		"tank",
+		"-f",
+		target)
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed creating zfs pool: %v", err)
+	}
+
+	pool, err := zfs.PoolOpen("tank")
+	if err != nil {
+		return fmt.Errorf("failed creating zfs pool: %v", err)
+	}
+
+	defer pool.Close()
+	return nil
+}
+
 func RunCommand(ctx context.Context, virtM VMlist) error {
 	err := InitFioOptions()
 	if err != nil {
