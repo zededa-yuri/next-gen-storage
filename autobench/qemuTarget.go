@@ -126,13 +126,16 @@ func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 		"-device", "e1000,netdev=net0", "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
 		"-serial", "chardev:ch0")
 
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	var outbuf, errbuf bytes.Buffer
+	cmd.Stdout = &outbuf
+	cmd.Stderr = &errbuf
 
 	err := cmd.Run() // This command will never ends
 	if err != nil {
-		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out.String())
+		fmt.Printf("QEMU VM message: %v; description=%v\n", err, ctx.Err())
+		if (outbuf.String() != "") {
+			fmt.Println("Output:", outbuf.String(), errbuf.String())
+		}
 	}
 	vm.cancel()
 }
@@ -152,7 +155,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		return fmt.Errorf("create qemu config failed! err:%v", err)
 	}
 
-	log.Printf("Creating %d virtual macnines\n", qemuCmd.CCountVM)
+	log.Printf("Creating %d virtual machines\n", qemuCmd.CCountVM)
 
 	for i := 0; i < qemuCmd.CCountVM; i++ {
 		var vm VirtM
@@ -182,9 +185,9 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		for i := 0; i < tryTimes; i++ {
 			vm.sshClient, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", vm.port), config)
 			if err != nil {
-				log.Printf("Unable to connect: localhost:%d err:%v", vm.port, err)
+				vm.isRunning = false
 			} else {
-				log.Printf("Connection to: localhost:%d was successful", vm.port)
+				log.Printf("VM creation and connection to: localhost:%d was successful", vm.port)
 				vm.isRunning = true
 				break
 			}
@@ -192,6 +195,10 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 				return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, vm.ctx.Err())
 			}
 			time.Sleep(3 * time.Second)
+		}
+
+		if (!vm.isRunning) {
+			log.Printf("unable to connect: localhost:%d err:%v", vm.port, err)
 		}
 
 		if err != nil {
@@ -212,6 +219,12 @@ func (t VMlist) FreeVM() {
 	for _, vm := range t {
 		vm.sshClient.Close()
 		vm.cancel()
+		if err := os.Remove(vm.imgPath); err != nil {
+			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
+		}
+		if err := os.Remove(vm.userImg); err != nil {
+			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
+		}
 	}
 }
 
@@ -233,7 +246,7 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	}
 
 	var countTests = mkconfig.CountTests(FioOptions)
-	const bufferTime = 5 * time.Minute
+	const bufferTime = 3 * time.Minute
 	var totalTime = time.Duration(int64(countTests)*int64(60*time.Second) + int64(bufferTime))
 	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
 
@@ -256,6 +269,7 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	}
 
 	// Heartbeat
+	fmt.Println("Total generated tests:", countTests)
 	fmt.Println("Total waiting time before the end of the test:", totalTime)
 	timerTomeOut := time.After(totalTime)
 	ticker := time.NewTicker(1 * time.Minute)
