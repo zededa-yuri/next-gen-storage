@@ -33,9 +33,17 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		return fmt.Errorf("could not create local dir for result: %w", err)
 	}
 
-	// Create config for fio
-	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, sshUser, targetDevice)
+	// Check FIO tools on VM
+	if err := sshwork.SendCommandSSH(
+		client,
+		"fio -h",
+		true, // sshwork.Foreground - true | sshwork.Background - false
+	); err != nil {
+		return fmt.Errorf("FIO tools not found on VM: %w", err)
+	}
+
+	// Check free space on VM
+	// Fix me
 
 	// Create folder on VM
 	remoteResultsAbsDir := filepath.Join("/home/", sshUser, "/FIO" + curentDate)
@@ -44,7 +52,29 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		fmt.Sprintf("mkdir %s", remoteResultsAbsDir),
 		true, // sshwork.Foreground - true | sshwork.Background - false
 	); err != nil {
-		return fmt.Errorf("couldnot install tools on VM: %w", err)
+		return fmt.Errorf("could not create remote dir for result: %w", err)
+	}
+
+	remoteResultsAbsDirLogs := filepath.Join(remoteResultsAbsDir, "logs")
+	if err := sshwork.SendCommandSSH(
+		client,
+		fmt.Sprintf("mkdir %s", remoteResultsAbsDirLogs),
+		true, // sshwork.Foreground - true | sshwork.Background - false
+	); err != nil {
+		return fmt.Errorf("could not create remote dir for log-result: %w", err)
+	}
+
+	// Create config for fio
+	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
+	if err := mkconfig.GenerateFIOConfig(
+		fioOptions,
+		fioTestTime,
+		localFioConfig,
+		sshUser,
+		targetDevice,
+		remoteResultsAbsDirLogs,
+	); err != nil {
+		return fmt.Errorf("create fio config failed: %w", err)
 	}
 
 	if err := sshwork.SendFileSCP(
@@ -102,6 +132,29 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		return fmt.Errorf("could not get result.json file from VM: %w", err)
 	}
 
+	if err := fioconv.ConvertJSONtoCSV(
+		filepath.Join(localResultsAbsDir, "/result.json"),
+		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
+	); err != nil {
+		return fmt.Errorf("could not convert JSON to CSV: %w", err)
+	}
+
+	if err := sshwork.SendCommandSSH(
+		client,
+		fmt.Sprintf("tar -czvf %s %s", filepath.Join(remoteResultsAbsDir, "logs.tar.gz"), remoteResultsAbsDirLogs),
+		true, // sshwork.Foreground - true | sshwork.Background - false
+	); err != nil {
+		return fmt.Errorf("could not create remote arhive logs.tar.gz: %w", err)
+	}
+
+	if err := sshwork.GetFileSCP(
+		client,
+		filepath.Join(localResultsAbsDir, "/logs.tar.gz"),
+		filepath.Join(remoteResultsAbsDir, "/logs.tar.gz"),
+	); err != nil {
+		return fmt.Errorf("could not get logs.tar.gz file from VM: %w", err)
+	}
+
 	// Download remote dmesg reults
 	if err := sshwork.GetFileSCP(
 		client,
@@ -109,13 +162,6 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		"/var/log/dmesg",
 	); err != nil {
 		return fmt.Errorf("could not get dmesg file from VM: %w", err)
-	}
-
-	if err := fioconv.ConvertJSONtoCSV(
-		filepath.Join(localResultsAbsDir, "/result.json"),
-		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
-	); err != nil {
-		return fmt.Errorf("could not convert JSON to CSV: %w", err)
 	}
 
 	// Save local dmesg file
@@ -130,14 +176,15 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	output, err := exec.Command("lshw").CombinedOutput()
 	if err != nil {
 		fmt.Println("Failed to collect hardware data! ", err)
+	} else {
+		lshw := filepath.Join(localResultsAbsDir, "lshw-result")
+		file, err := os.Create(lshw)
+    	if err != nil{
+    	    fmt.Println("Failed to create file with hardware information: ", err)
+    	}
+    	defer file.Close()
+    	file.WriteString(string(output))
 	}
-	lshw := filepath.Join(localResultsAbsDir, "lshw-result")
-	file, err := os.Create(lshw)
-    if err != nil{
-        fmt.Println("Failed to create file with hardware information: ", err)
-    }
-    defer file.Close()
-    file.WriteString(string(output))
 
 	fmt.Println("Tests finished!")
 	return nil
@@ -163,10 +210,15 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 	if err != nil {
 		return fmt.Errorf("could not create local dir for result: %w", err)
 	}
+	localResultsAbsDirLogs := filepath.Join(localResultsAbsDir, "logs")
+	err = os.Mkdir(localResultsAbsDirLogs, 0755)
+	if err != nil {
+		return fmt.Errorf("could not create local dir for log-result: %w", err)
+	}
 
 	// Create config for fio
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, user, targetDevice)
+	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, user, targetDevice, localResultsAbsDir)
 
 	// Waiting end fio test
 	var countTests = mkconfig.CountTests(fioOptions)

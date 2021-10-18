@@ -1,10 +1,10 @@
 package qemutmp
 
 const QemuConfTemplate = `
-[drive "hd"]
-  if = "none"
-  file = "{{.FileLocation}}"
-  format = "{{.Format}}"
+#[drive "hd"]
+#  if = "none"
+#  file = "{{.FileLocation}}"
+#  format = "{{.Format}}"
 
 [device]
   driver = "intel-iommu"
