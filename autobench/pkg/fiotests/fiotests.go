@@ -21,7 +21,6 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 	exPath := filepath.Dir(ex)
-	fmt.Println("exPath:", exPath)
 
 	// Create folder for results
 	localResultsAbsDir := localDirResults
@@ -154,14 +153,21 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	); err != nil {
 		return fmt.Errorf("could not get logs.tar.gz file from VM: %w", err)
 	}
+	fmt.Println("The download of the results was successful")
 
-	// Download remote dmesg reults
+	// Download remote dmesg reults cat
 	if err := sshwork.GetFileSCP(
 		client,
 		filepath.Join(localResultsAbsDir, "/guest_dmesg"),
 		"/var/log/dmesg",
 	); err != nil {
-		return fmt.Errorf("could not get dmesg file from VM: %w", err)
+		if err := sshwork.GetFileSCP(
+			client,
+			filepath.Join(localResultsAbsDir, "/guest_dmesg"),
+			"/var/log/kern.log",
+		); err != nil {
+			fmt.Println("could not get dmesg file from VM: ", err)
+		}
 	}
 
 	// Save local dmesg file
@@ -180,7 +186,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		lshw := filepath.Join(localResultsAbsDir, "lshw-result")
 		file, err := os.Create(lshw)
     	if err != nil{
-    	    fmt.Println("Failed to create file with hardware information: ", err)
+    	    fmt.Println("failed to create file with hardware information: ", err)
     	}
     	defer file.Close()
     	file.WriteString(string(output))
@@ -199,7 +205,6 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 	exPath := filepath.Dir(ex)
-	fmt.Println("exPath:", exPath)
 
 	// Create folder for results
 	localResultsAbsDir := localDirResults
