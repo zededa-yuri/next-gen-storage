@@ -153,7 +153,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	); err != nil {
 		return fmt.Errorf("could not get logs.tar.gz file from VM: %w", err)
 	}
-	fmt.Println("The download of the results was successful")
+	fmt.Println("The download of the results for was successful")
 
 	// Download remote dmesg reults cat
 	if err := sshwork.GetFileSCP(
@@ -175,13 +175,13 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 							filepath.Join(localResultsAbsDir, "/host_dmesg"),
 							).CombinedOutput()
 	if err != nil {
-		fmt.Println("Copying local dmesg file with logs failed! ", err, out)
+		fmt.Println("copying local dmesg file with logs failed! ", err, out)
 	}
 
 	// Saving information about the hardware
 	output, err := exec.Command("lshw").CombinedOutput()
 	if err != nil {
-		fmt.Println("Failed to collect hardware data! ", err)
+		fmt.Println("failed to collect hardware data! ", err)
 	} else {
 		lshw := filepath.Join(localResultsAbsDir, "lshw-result")
 		file, err := os.Create(lshw)
@@ -192,7 +192,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
     	file.WriteString(string(output))
 	}
 
-	fmt.Println("Tests finished!")
+	fmt.Println("FIO Tests finished! Wait for VM to complete.")
 	return nil
 }
 
