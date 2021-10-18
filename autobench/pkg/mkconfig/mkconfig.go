@@ -17,6 +17,11 @@ runtime=%s
 time_based=1
 group_reporting
 filename=%s
+log_avg_msec=20
+write_bw_log
+write_lat_log
+write_iops_log
+
 `
 
 const globalTplcheckSumm = `[global]
@@ -29,6 +34,11 @@ verify_fatal=1
 time_based=1
 group_reporting
 filename=%s
+log_avg_msec=20
+write_bw_log
+write_lat_log
+write_iops_log
+
 `
 
 const sectionTpl = `
