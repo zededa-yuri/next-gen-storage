@@ -115,11 +115,12 @@ func getVMImage(index int, filename string) (string, error) {
 	return fPath, nil
 }
 
-func qemuVmRun(vm VirtM, qemuConfigDir string) {
-	cmd := exec.CommandContext(vm.ctx,
+func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
+	cmd := exec.CommandContext(ctx,
 		"qemu-system-x86_64",
 		"-cpu", "host",
 		"-readconfig", qemuConfigDir,
+		"-drive", "hd,", fmt.Sprintf("file=%s,format=raw,if=none", vm.imgPath),
 		"-display", "none",
 		"-cdrom", vm.userImg,
 		"-device", "e1000,netdev=net0", "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
@@ -131,7 +132,7 @@ func qemuVmRun(vm VirtM, qemuConfigDir string) {
 
 	err := cmd.Run() // This command will never ends
 	if err != nil {
-		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, vm.ctx.Err(), out.String())
+		fmt.Printf("error launching command: %v; err=%v\nStdout:\n%s\n", err, ctx.Err(), out.String())
 	}
 	vm.cancel()
 }
@@ -167,7 +168,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 			vm.userImg = filepath.Join(getSelfPath(), fmt.Sprintf("%d-%s", i, "user-data.img"))
 		}
 
-		go qemuVmRun(vm, qemuConfigDir)
+		go qemuVmRun(vm.ctx, vm, qemuConfigDir)
 
 		config := &ssh.ClientConfig{
 			User: "ubuntu",
@@ -220,7 +221,7 @@ func fio(virt *VirtM, localResultsFolder, localDirResults,
 	if err := fiotests.RunFIOTest(virt.sshClient, "ubuntu", localResultsFolder,
 		localDirResults, targetDevice, fioOptions,
 		fioTestTime); err != nil {
-		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("127.0.0.1:%d", virt.port), err)
+		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("localhost:%d", virt.port), err)
 		testFailed <- true
 	}
 }
@@ -273,7 +274,7 @@ there:
 		}
 	}
 
-	fmt.Println("Free VM")
+	fmt.Println("Free VM ...")
 	virtM.FreeVM()
 	cancelVMS()
 	return nil

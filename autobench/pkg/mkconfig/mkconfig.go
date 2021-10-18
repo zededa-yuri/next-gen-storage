@@ -18,9 +18,7 @@ time_based=1
 group_reporting
 filename=%s
 log_avg_msec=20
-write_bw_log
-write_lat_log
-write_iops_log
+per_job_logs=0
 
 `
 
@@ -35,9 +33,7 @@ time_based=1
 group_reporting
 filename=%s
 log_avg_msec=20
-write_bw_log
-write_lat_log
-write_iops_log
+per_job_logs=0
 
 `
 
@@ -47,6 +43,8 @@ rw=%s
 bs=%s
 iodepth=%d
 numjobs=%d
+write_bw_log=%s
+write_iops_log=%s
 stonewall
 `
 
@@ -139,7 +137,7 @@ func (d *DepthType) Set(v string) error {
 	v = strings.ToLower(v)
 	var val = strings.Split(v, ",")
 	*d = []int{}
-	var valid = []int{1, 4, 8, 16, 32}
+	var valid = []int{1, 4, 8, 16, 32, 64}
 	for _, s := range val {
 		n, err := strconv.Atoi(s)
 		if err != nil || !containsInt(valid, n) {
@@ -183,7 +181,7 @@ func CountTests(cfg FioOptions) int {
 func GenerateFIOConfig(
 	cfg FioOptions,
 	runtime time.Duration,
-	outPath, sshUser, targetDevice string,
+	outPath, sshUser, targetDevice, remoteDirResults string,
 ) error {
 	if len(cfg.Operations) == 0 {
 		cfg.Operations = OpType{"read", "write"}
@@ -232,7 +230,8 @@ func GenerateFIOConfig(
 			for _, depth := range cfg.Iodepth {
 				for _, job := range cfg.Jobs {
 					var section = fmt.Sprintf("%s-%s-%d", rw, bs, count)
-					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job)
+					var logResName = filepath.Join(remoteDirResults, section)
+					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job, logResName, logResName)
 					count++
 				}
 			}
