@@ -1,12 +1,10 @@
 package vhostzfs
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,33 +13,49 @@ import (
 )
 
 
+func CreateZpool(zpoolName, targetDisk string) ( error) {
+	var vdev zfs.VDevTree
+	var vdevs, mdevs []zfs.VDevTree
 
-func SetupDiskZfs(ctx context.Context, target string) error {
-	/* TODO: use go-libzfs package to create pool */
-	cmd := exec.Command("zpool",
-		"create",
-		"tank",
-		"-f",
-		target)
+	// build device specs
+	mdevs = append(mdevs, zfs.VDevTree{Type: zfs.VDevTypeDisk, Path: targetDisk})
 
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
+	// pool specs
+	vdevs = []zfs.VDevTree{
+		zfs.VDevTree{Type: zfs.VDevTypeDisk, Devices: mdevs},
 	}
 
-	pool, err := zfs.PoolOpen("tank")
+	vdev.Devices = vdevs
+	props := make(map[zfs.Prop]string) // pool properties
+	fsprops := make(map[zfs.Prop]string) // root dataset filesystem properties
+	features := make(map[string]string) // pool features
+
+	// Turn off auto mounting by ZFS
+	fsprops[zfs.DatasetPropMountpoint] = "none"
+
+	// Enable some features
+/* 	features["async_destroy"] = "enabled"
+	features["empty_bpobj"] = "enabled"
+	features["lz4_compress"] = "enabled" */
+	pool, err := zfs.PoolCreate(zpoolName, vdev, features, props, fsprops)
 	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
+		return fmt.Errorf("Failed to create zpool: %w", err)
 	}
-	pool.Close()
+	defer pool.Close()
+
+	return nil
+}
+
+func CreateZvol(zpoolName, zvolName string) error {
 
 	props := make(map[zfs.Prop]zfs.Property)
-	strSize := fmt.Sprintf("%d", 1024*1024*1024*60)
+	strSize := fmt.Sprintf("%d", 1024*1024*1024*50) // 50Gb
 	props[zfs.DatasetPropVolsize] = zfs.Property{Value: strSize}
 	props[zfs.DatasetPropVolblocksize] = zfs.Property{Value: fmt.Sprintf("%d", 16*1024)}
 	props[zfs.DatasetPropReservation] = zfs.Property{Value: strSize}
 
-	dataset, err := zfs.DatasetCreate("tank/test-zvol", zfs.DatasetTypeVolume, props)
+	dataset, err := zfs.DatasetCreate(fmt.Sprintf("%s/%s", zpoolName, zvolName),
+									  zfs.DatasetTypeVolume, props)
 	if err != nil {
 		return fmt.Errorf("Failed to create zvol: %w", err)
 	}
@@ -184,8 +198,9 @@ func GenerateNaaSerial() string {
 	return fmt.Sprintf("%s%09x", naaPrefix, rand.Uint32())
 }
 
-func SetupVhost(device, iblockId string) (string, error) {
-	device = "/dev/zvol/tank/test-zvol"
+func SetupVhost(devicePath, iblockId string) (string, error) {
+//FIX ME params
+	devicePath = "/dev/zvol/tank/test-zvol"
 	iblockId = "test_iblock"
 	serial := GenerateNaaSerial()
 	wwn := fmt.Sprintf("naa.%s", serial)
