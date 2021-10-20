@@ -26,10 +26,10 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	localResultsAbsDir := localDirResults
 	if localResultsAbsDir == "" {
 		localResultsAbsDir = filepath.Join(exPath, localResultsFolder + curentDate)
-	}
-	err = os.Mkdir(localResultsAbsDir, 0755)
-	if err != nil {
-		return fmt.Errorf("could not create local dir for result: %w", err)
+		err = os.Mkdir(localResultsAbsDir, 0755)
+		if err != nil {
+			return fmt.Errorf("could not create local dir for result: %w", err)
+		}
 	}
 
 	// Check FIO tools on VM
@@ -42,7 +42,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	}
 
 	// Check free space on VM
-	// Fix me
+	// Fix me ^
 
 	// Create folder on VM
 	remoteResultsAbsDir := filepath.Join("/home/", sshUser, "/FIO" + curentDate)
@@ -192,7 +192,6 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
     	file.WriteString(string(output))
 	}
 
-	fmt.Println("FIO Tests finished! Wait for VM to complete.")
 	return nil
 }
 
@@ -210,11 +209,12 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 	localResultsAbsDir := localDirResults
 	if localResultsAbsDir == "" {
 		localResultsAbsDir = filepath.Join(exPath, localResultsFolder + curentDate)
+		err = os.Mkdir(localResultsAbsDir, 0755)
+		if err != nil {
+			return fmt.Errorf("could not create local dir for result: %w", err)
+		}
 	}
-	err = os.Mkdir(localResultsAbsDir, 0755)
-	if err != nil {
-		return fmt.Errorf("could not create local dir for result: %w", err)
-	}
+
 	localResultsAbsDirLogs := filepath.Join(localResultsAbsDir, "logs")
 	err = os.Mkdir(localResultsAbsDirLogs, 0755)
 	if err != nil {
