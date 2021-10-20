@@ -16,10 +16,6 @@ import (
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
 	"golang.org/x/crypto/ssh"
-	zfs "github.com/bicomsystems/go-libzfs"
-	"io/ioutil"
-	"strings"
-	"math/rand"
 )
 
 type QemuCommand struct {
@@ -27,11 +23,13 @@ type QemuCommand struct {
 	CFileLocation  string `short:"i" long:"image" description:"The option takes the path to the .img file" default:"bionic-server-cloudimg-i386.img"`
 	CFormat        string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus         string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
-	CUser		   string `short:"u" long:"user" description:"A user name for VM connections" default:"ubuntu"`
+	CUser          string `short:"u" long:"user" description:"A user name for VM connections" default:"ubuntu"`
 	CMemory        string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
 	CPassword      string `short:"x" long:"password" description:"Format options " default:"asdfqwer"`
 	CPort          int    `short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
 	CCountVM       int    `short:"n" long:"number" description:"Count create VM" default:"1"`
+	CZfs           bool   `short:"z" long:"zfs" description:"Create zfs volume and share to vm via VHost"`
+	CZfsTarget     string `short:"d" long:"zfstarget" description:"Path to device for create zvol"`
 }
 
 var qemuCmd QemuCommand
@@ -44,24 +42,25 @@ type VmConfig struct {
 	Memory       string // default "512"
 	Kernel       string // default ""
 	Password     string // default "asdfqwer"
-	VhostWWPN    string
+	VhostWWPN    string // no set by default
 }
 
 type VirtM struct {
-	ctx       	context.Context
-	cancel    	context.CancelFunc
-	sshClient 	*ssh.Client
-	timeOut   	time.Duration
-	port      	int
-	isRunning 	bool
-	imgPath   	string
-	userImg   	string
-	resultPatch string
+	ctx        context.Context
+	cancel     context.CancelFunc
+	sshClient  *ssh.Client
+	timeOut    time.Duration
+	port       int
+	isRunning  bool
+	imgPath    string
+	userImg    string
+	resultPath string
 }
 
 type VMlist []*VirtM
 
 func writeMainConfig(path string, template_args VmConfig) error {
+	// FIX ME vhost issue
 	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
 	if err != nil {
 		fmt.Printf("failed parse template%v\n", err)
@@ -122,6 +121,7 @@ func getVMImage(index int, filename string) (string, error) {
 	return fPath, nil
 }
 
+// qemuVmRun go-routine function with running VM
 func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 	cmd := exec.CommandContext(ctx,
 		"qemu-system-x86_64",
@@ -134,15 +134,15 @@ func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 		"-serial", "chardev:ch0")
 
 	cmdStr := cmd.String()
-	qemuCmdFile, err := os.OpenFile(filepath.Join(vm.resultPatch, "qemu-cmd.ini"),
-									os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	qemuCmdFile, err := os.OpenFile(filepath.Join(vm.resultPath, "qemu-cmd.ini"),
+		os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
-		fmt.Printf("failed to open file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
+		fmt.Printf("failed to open file %s: %v\n", filepath.Join(vm.resultPath, "qemu-cmd.ini"), err)
 	}
 	defer qemuCmdFile.Close()
 
 	if _, err := qemuCmdFile.WriteString(cmdStr); err != nil {
-		fmt.Printf("failed write to file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
+		fmt.Printf("failed write to file %s: %v\n", filepath.Join(vm.resultPath, "qemu-cmd.ini"), err)
 	}
 
 	var outbuf, errbuf bytes.Buffer
@@ -152,32 +152,17 @@ func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 	err = cmd.Run() // This command will never ends
 	if err != nil {
 		fmt.Printf("QEMU VM message: %v; description=%v\n", err, ctx.Err())
-		if (outbuf.String() != "") {
+		if outbuf.String() != "" {
 			fmt.Println("Output:", outbuf.String(), errbuf.String())
 		}
 	}
 	vm.cancel()
 }
 
-func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration, VhostWWPN string) error {
-	templateArgs := VmConfig{
-		FileLocation: qemuCmd.CFileLocation,
-		Format:       qemuCmd.CFormat,
-		VCpus:        qemuCmd.CVCpus,
-		Memory:       qemuCmd.CMemory,
-		Password:     qemuCmd.CPassword,
-		VhostWWPN:    VhostWWPN,
-	}
-
-	qemuConfigDir := filepath.Join(getSelfPath(), "qemu.cfg")
-	err := writeMainConfig(qemuConfigDir, templateArgs)
-	if err != nil {
-		return fmt.Errorf("create qemu config failed! err:%v", err)
-	}
-
+func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error {
 	curentDate := time.Now().Format("2006-01-02-15:04:05")
-	mainResultsDirForCurentTest := filepath.Join(getSelfPath(), "FIO-results-QEMU-Target" + curentDate)
-	err = os.Mkdir(mainResultsDirForCurentTest, 0755)
+	mainResultsDirForCurentTest := filepath.Join(getSelfPath(), "FIO-results-QEMU-Target"+curentDate)
+	err := os.Mkdir(mainResultsDirForCurentTest, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create local dir for result: %w", err)
 	}
@@ -199,13 +184,29 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration, VhostW
 			vm.userImg = filepath.Join(getSelfPath(), fmt.Sprintf("%d-%s", i, "user-data.img"))
 		}
 
-		vm.resultPatch = filepath.Join(mainResultsDirForCurentTest, fmt.Sprintf("vm-port-%d", vm.port))
-		err = os.Mkdir(vm.resultPatch, 0755)
+		vm.resultPath = filepath.Join(mainResultsDirForCurentTest, fmt.Sprintf("vm-port-%d", vm.port))
+		err = os.Mkdir(vm.resultPath, 0755)
 		if err != nil {
-			return fmt.Errorf("could not create local dir:[%s] for result: %w", vm.resultPatch, err)
+			return fmt.Errorf("could not create local dir:[%s] for result: %w", vm.resultPath, err)
 		}
 
-		go qemuVmRun(vm.ctx, vm, qemuConfigDir)
+		// FIX ME Create zfs volume and wwn for this VM
+
+		templateArgs := VmConfig{
+			FileLocation: qemuCmd.CFileLocation,
+			Format:       qemuCmd.CFormat,
+			VCpus:        qemuCmd.CVCpus,
+			Memory:       qemuCmd.CMemory,
+			Password:     qemuCmd.CPassword,
+			//VhostWWPN:    VhostWWPN, //FIX ME
+		}
+		//FIX ME add if for checge temlate
+		err = writeMainConfig(filepath.Join(vm.resultPath, "qemu.cfg"), templateArgs)
+		if err != nil {
+			return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPath, err)
+		}
+
+		go qemuVmRun(vm.ctx, vm, filepath.Join(vm.resultPath, "qemu.cfg"))
 
 		config := &ssh.ClientConfig{
 			User: qemuCmd.CUser,
@@ -231,7 +232,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration, VhostW
 			time.Sleep(3 * time.Second)
 		}
 
-		if (!vm.isRunning) {
+		if !vm.isRunning {
 			log.Printf("unable to connect: localhost:%d err:%v", vm.port, err)
 		}
 
@@ -241,11 +242,6 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration, VhostW
 				vmo.cancel()
 			}
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:%v", vm.port, err)
-		}
-
-		err := writeMainConfig(filepath.Join(vm.resultPatch, "qemu.cfg"), templateArgs)
-		if err != nil {
-			return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPatch, err)
 		}
 
 		*t = append(*t, &vm)
@@ -267,11 +263,14 @@ func (t VMlist) FreeVM() {
 	}
 }
 
+// fio - go-routine function with ssh
+// connect and running fio comand on VM
 func fio(virt *VirtM, localResultsFolder,
 	targetDevice string, fioOptions mkconfig.FioOptions,
 	fioTestTime time.Duration) {
+	// FIX ME change target device if we have zfs option
 	if err := fiotests.RunFIOTest(virt.sshClient, qemuCmd.CUser, localResultsFolder,
-		virt.resultPatch, targetDevice, fioOptions,
+		virt.resultPath, targetDevice, fioOptions,
 		fioTestTime); err != nil {
 		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("localhost:%d", virt.port), err)
 		testFailed <- true
@@ -279,246 +278,7 @@ func fio(virt *VirtM, localResultsFolder,
 	log.Printf("Test on a VM with port: %d finished! Wait for VM to complete.", virt.port)
 }
 
-func SetupDiskZfs(ctx context.Context, target string) error {
-	/* TODO: use go-libzfs package to create pool */
-	cmd := exec.Command("zpool",
-		"create",
-		"tank",
-		"-f",
-		target)
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-
-	pool, err := zfs.PoolOpen("tank")
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-
-	defer pool.Close()
-	return nil
-}
-
-func SetupDiskZfs(ctx context.Context, target string) error {
-	/* TODO: use go-libzfs package to create pool */
-	cmd := exec.Command("zpool",
-		"create",
-		"tank",
-		"-f",
-		target)
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-
-	pool, err := zfs.PoolOpen("tank")
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-
-	defer pool.Close()
-	return nil
-}
-
-func SetupDiskZfs(ctx context.Context, target string) error {
-	/* TODO: use go-libzfs package to create pool */
-	cmd := exec.Command("zpool",
-		"create",
-		"tank",
-		"-f",
-		target)
-
-	err := cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-
-	pool, err := zfs.PoolOpen("tank")
-	if err != nil {
-		return fmt.Errorf("failed creating zfs pool: %v", err)
-	}
-	pool.Close()
-
-	props := make(map[zfs.Prop]zfs.Property)
-	strSize := fmt.Sprintf("%d", 1024*1024*1024*60)
-	props[zfs.DatasetPropVolsize] = zfs.Property{Value: strSize}
-	props[zfs.DatasetPropVolblocksize] = zfs.Property{Value: fmt.Sprintf("%d", 16*1024)}
-	props[zfs.DatasetPropReservation] = zfs.Property{Value: strSize}
-
-	dataset, err := zfs.DatasetCreate("tank/test-zvol", zfs.DatasetTypeVolume, props)
-	if err != nil {
-		return fmt.Errorf("Failed to create zvol: %w", err)
-	}
-	defer dataset.Close()
-
-	return nil
-}
-
-func waitForFile(fileName string) error {
-	maxDelay := time.Second * 5
-	delay := time.Millisecond * 500
-	var waited time.Duration
-	for {
-		if delay != 0 {
-			time.Sleep(delay)
-			waited += delay
-		}
-		if _, err := os.Stat(fileName); err == nil {
-			return nil
-		} else {
-			if waited > maxDelay {
-				return fmt.Errorf("file not found: error %v", err)
-			}
-			delay = 2 * delay
-			if delay > maxDelay {
-				delay = maxDelay
-			}
-		}
-	}
-}
-
-const (
-	tgtPath    = "/sys/kernel/config/target"
-	iBlockPath = tgtPath + "/core/iblock_0"
-	naaPrefix  = "5001405" // from rtslib-fb
-)
-
-// VHostCreateIBlock - Create vHost fabric
-func VHostCreateIBlock(tgtName, wwn string) error {
-	targetRoot := filepath.Join(iBlockPath, tgtName)
-	if _, err := os.Stat(targetRoot); err != nil {
-		return fmt.Errorf("tgt access error (%s): %s", targetRoot, err)
-	}
-	vhostRoot := filepath.Join(tgtPath, "vhost", wwn, "tpgt_1")
-	vhostLun := filepath.Join(vhostRoot, "lun", "lun_0")
-	err := os.MkdirAll(vhostLun, os.ModeDir)
-	if err != nil {
-		return fmt.Errorf("cannot create vhost: %v", err)
-	}
-	controlCommand := "scsi_host_id=1,scsi_channel_id=0,scsi_target_id=0,scsi_lun_id=0"
-	if err := ioutil.WriteFile(filepath.Join(targetRoot, "control"), []byte(controlCommand), 0660); err != nil {
-		return fmt.Errorf("error set control: %v", err)
-	}
-	if err := waitForFile(filepath.Join(vhostRoot, "nexus")); err != nil {
-		return fmt.Errorf("error waitForFile: %v", err)
-	}
-	if err := ioutil.WriteFile(filepath.Join(vhostRoot, "nexus"), []byte(wwn), 0660); err != nil {
-		return fmt.Errorf("error set nexus: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(vhostLun, "iblock")); os.IsNotExist(err) {
-		if err := os.Symlink(targetRoot, filepath.Join(vhostLun, "iblock")); err != nil {
-			return fmt.Errorf("error create symlink: %v", err)
-		}
-	}
-	return nil
-}
-
-func VHostDeleteIBlock(wwn string) error {
-	vhostRoot := filepath.Join(tgtPath, "vhost", wwn, "tpgt_1")
-	vhostLun := filepath.Join(vhostRoot, "lun", "lun_0")
-	if _, err := os.Stat(vhostLun); os.IsNotExist(err) {
-		return fmt.Errorf("vHost do not exists for wwn %s: %s", wwn, err)
-	}
-	if err := os.Remove(filepath.Join(vhostLun, "iblock")); err != nil {
-		return fmt.Errorf("error delete symlink: %v", err)
-	}
-	if err := os.RemoveAll(vhostLun); err != nil {
-		return fmt.Errorf("error delete lun: %v", err)
-	}
-	if err := os.RemoveAll(vhostRoot); err != nil {
-		return fmt.Errorf("error delete lun: %v", err)
-	}
-	if err := os.RemoveAll(filepath.Dir(vhostRoot)); err != nil {
-		return fmt.Errorf("error delete lun: %v", err)
-	}
-	return nil
-}
-
-func TargetCreateIBlock(dev, tgtName, serial string) error {
-	targetRoot := filepath.Join(iBlockPath, tgtName)
-	err := os.MkdirAll(targetRoot, os.ModeDir)
-	if err != nil {
-		return fmt.Errorf("cannot create fileio: %v", err)
-	}
-	if err := waitForFile(filepath.Join(targetRoot, "control")); err != nil {
-		return fmt.Errorf("error waitForFile: %v", err)
-	}
-	controlCommand := fmt.Sprintf("udev_path=%s", dev)
-	if err := ioutil.WriteFile(filepath.Join(targetRoot, "control"), []byte(controlCommand), 0660); err != nil {
-		return fmt.Errorf("error set control: %v", err)
-	}
-	if err := ioutil.WriteFile(filepath.Join(targetRoot, "wwn", "vpd_unit_serial"), []byte(serial), 0660); err != nil {
-		return fmt.Errorf("error set vpd_unit_serial: %v", err)
-	}
-	if err := ioutil.WriteFile(filepath.Join(targetRoot, "enable"), []byte("1"), 0660); err != nil {
-		return fmt.Errorf("error set enable: %v", err)
-	}
-	return nil
-}
-
-func GetSerialTarget(tgtName string) (string, error) {
-	targetRoot := filepath.Join(iBlockPath, tgtName)
-	//it returns something like "T10 VPD Unit Serial Number: 5001405043a8fbf4"
-	serial, err := ioutil.ReadFile(filepath.Join(targetRoot, "wwn", "vpd_unit_serial"))
-	if err != nil {
-		return "", fmt.Errorf("GetSerialTarget for %s: %s", targetRoot, err)
-	}
-	parts := strings.Fields(strings.TrimSpace(string(serial)))
-	if len(parts) == 0 {
-		return "", fmt.Errorf("GetSerialTarget for %s: empty line", targetRoot)
-	}
-	return parts[len(parts)-1], nil
-}
-
-func IsVhostIblockExist(tgtName string) (bool, error) {
-	serial, err := GetSerialTarget(tgtName)
-	if err != nil {
-		return false, fmt.Errorf("CheckVHostIBlock (%s): %v", tgtName, err)
-	}
-
-	vhostRoot := filepath.Join(tgtPath, "vhost", fmt.Sprintf("naa.%s", serial), "tpgt_1")
-	vhostLun := filepath.Join(vhostRoot, "lun", "lun_0")
-	if _, err := os.Stat(filepath.Join(vhostLun, "iblock")); err == nil {
-		return true, nil
-	}
-	return false, nil
-}
-
-func GenerateNaaSerial() string {
-	return fmt.Sprintf("%s%09x", naaPrefix, rand.Uint32())
-}
-
-func SetupVhost() (string, error) {
-	device := "/dev/zvol/tank/test-zvol"
-	iblock_id := "test_iblock"
-	serial := GenerateNaaSerial()
-	wwn := fmt.Sprintf("naa.%s", serial)
-	err := TargetCreateIBlock(device, iblock_id, serial)
-	if err != nil {
-		return "", fmt.Errorf("TargetCreateFileIODev(%s, %s, %s): %v",
-			device, iblock_id, serial, err)
-	}
-	exists,err := IsVhostIblockExist(iblock_id) 
-	if !exists {
-		err = VHostCreateIBlock(iblock_id, wwn)
-		if err != nil {
-			errString := fmt.Sprintf("VHostCreateIBlock: %v", err)
-			err = VHostDeleteIBlock(wwn)
-			if err != nil {
-				errString = fmt.Sprintf("%s; VHostDeleteIBlock: %v",
-					errString, err)
-			}
-			return "", fmt.Errorf("VHostCreateIBlock(%s, %s): %s",
-				iblock_id, wwn, errString)
-		}
-	}
-	return wwn, nil
-
-}
-
+// RunCommand - Starts the testing process for qemu target
 func RunCommand(ctx context.Context, virtM VMlist) error {
 	err := InitFioOptions()
 	if err != nil {
@@ -530,19 +290,14 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	var totalTime = time.Duration(int64(countTests)*int64(60*time.Second) + int64(bufferTime))
 	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
 
-	// err = SetupDiskZfs(ctxVMs, opts.TargetDisk)
-	// if err != nil {
-	// 	cancelVMS()
-	// 	return fmt.Errorf("Can't setup disk %s:%v", opts.TargetDisk, err)
-	// }
-
-	wwpn,err := SetupVhost()
-	if err != nil {
-		cancelVMS()
-		return fmt.Errorf("Can't setup disk %s:%v", opts.TargetDisk, err)
+	if qemuCmd.CZfs {
+		// Check zfs in curent system!
+		// Check iblok sysfs dir
+		// FIX ME
+		// create zfs tunk here via get device, example /dev/sdb
 	}
 
-	err = virtM.AllocateVM(ctxVMs, totalTime, wwpn)
+	err = virtM.AllocateVM(ctxVMs, totalTime)
 	if err != nil {
 		cancelVMS()
 		return fmt.Errorf("VM create in QEMU failed err:%v", err)
