@@ -29,7 +29,7 @@ type QemuCommand struct {
 	CPort          int    `short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
 	CCountVM       int    `short:"n" long:"number" description:"Count create VM" default:"1"`
 	CZfs           bool   `short:"z" long:"zfs" description:"Create zfs volume and share to vm via VHost"`
-	CZfsTarget     string `short:"d" long:"zfstarget" description:"Path to device for create zvol"`
+	CZfsTarget     string `short:"d" long:"zfstarget" description:"Path to device for create zpool"`
 }
 
 var qemuCmd QemuCommand
