@@ -118,28 +118,6 @@ func getVMImage(index int, filename string) (string, error) {
 	return fPath, nil
 }
 
-func saveQemuCfgInResults(vm VirtM, template_args VmConfig) error{
-	err := writeMainConfig(filepath.Join(vm.resultPatch, "qemu.cfg"), template_args)
-	if err != nil {
-		return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPatch, err)
-	}
-
-	qemuCmdFile, err := os.OpenFile(filepath.Join(vm.resultPatch, "qemu-cmd.ini"),
-									os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-
-	if err != nil {
-		fmt.Printf("failed to open file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
-		return err
-	}
-	defer qemuCmdFile.Close()
-
-	if _, err := qemuCmdFile.WriteString(vm.qemuRunCmd); err != nil {
-		fmt.Printf("failed write to file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
-	}
-
-	return nil
-}
-
 func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 	cmd := exec.CommandContext(ctx,
 		"qemu-system-x86_64",
@@ -151,12 +129,23 @@ func qemuVmRun(ctx context.Context, vm VirtM, qemuConfigDir string) {
 		"-device", "e1000,netdev=net0", "-netdev", fmt.Sprintf("user,id=net0,hostfwd=tcp::%d-:22", vm.port),
 		"-serial", "chardev:ch0")
 
-	vm.qemuRunCmd = cmd.String() // For save configure
+	cmdStr := cmd.String()
+	qemuCmdFile, err := os.OpenFile(filepath.Join(vm.resultPatch, "qemu-cmd.ini"),
+									os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Printf("failed to open file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
+	}
+	defer qemuCmdFile.Close()
+
+	if _, err := qemuCmdFile.WriteString(cmdStr); err != nil {
+		fmt.Printf("failed write to file %s: %v\n", filepath.Join(vm.resultPatch, "qemu-cmd.ini"), err)
+	}
+
 	var outbuf, errbuf bytes.Buffer
 	cmd.Stdout = &outbuf
 	cmd.Stderr = &errbuf
 
-	err := cmd.Run() // This command will never ends
+	err = cmd.Run() // This command will never ends
 	if err != nil {
 		fmt.Printf("QEMU VM message: %v; description=%v\n", err, ctx.Err())
 		if (outbuf.String() != "") {
@@ -249,7 +238,11 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:%v", vm.port, err)
 		}
 
-		saveQemuCfgInResults(vm, templateArgs)
+		err := writeMainConfig(filepath.Join(vm.resultPatch, "qemu.cfg"), templateArgs)
+		if err != nil {
+			return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPatch, err)
+		}
+
 		*t = append(*t, &vm)
 	}
 
@@ -278,7 +271,7 @@ func fio(virt *VirtM, localResultsFolder,
 		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("localhost:%d", virt.port), err)
 		testFailed <- true
 	}
-	log.Printf("Test on a VM with port: %d finished!", virt.port)
+	log.Printf("Test on a VM with port: %d finished! Wait for VM to complete.", virt.port)
 }
 
 func RunCommand(ctx context.Context, virtM VMlist) error {
@@ -329,7 +322,7 @@ there:
 		}
 	}
 
-	fmt.Println("All FIO tests finished! Wait for VM to complete.")
+	fmt.Println("All FIO tests finished!")
 	virtM.FreeVM()
 	cancelVMS()
 	return nil
