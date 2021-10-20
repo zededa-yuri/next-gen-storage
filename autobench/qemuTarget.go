@@ -52,7 +52,6 @@ type VirtM struct {
 	imgPath   	string
 	userImg   	string
 	resultPatch string
-	qemuRunCmd	string
 }
 
 type VMlist []*VirtM
