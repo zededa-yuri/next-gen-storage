@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -12,6 +13,13 @@ import (
 	zfs "github.com/bicomsystems/go-libzfs"
 )
 
+func CheckZfsOnSystem() error {
+	output, err := exec.Command("zfs version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to collect hardware data! output:[%s] err:[%w]", output, err)
+	}
+	return nil
+}
 
 func CreateZpool(zpoolName, targetDisk string) ( error) {
 	var vdev zfs.VDevTree
@@ -22,7 +30,7 @@ func CreateZpool(zpoolName, targetDisk string) ( error) {
 
 	// pool specs
 	vdevs = []zfs.VDevTree{
-		zfs.VDevTree{Type: zfs.VDevTypeDisk, Devices: mdevs},
+		{Type: zfs.VDevTypeDisk, Devices: mdevs},
 	}
 
 	vdev.Devices = vdevs
@@ -46,6 +54,21 @@ func CreateZpool(zpoolName, targetDisk string) ( error) {
 	return nil
 }
 
+func DestroyZpool(zpoolName string) error {
+	// Need handle to pool at first place
+	p, err := zfs.PoolOpen(zpoolName)
+	if err != nil {
+		return fmt.Errorf("Failed to open zpool: %w", err)
+	}
+	defer p.Close()
+
+	if err = p.Destroy(fmt.Sprintf("Pool %s destruction was successful", zpoolName)); err != nil {
+		return fmt.Errorf("Failed to destroy zpool %s: err:%w", zpoolName, err)
+	}
+
+	return nil
+}
+
 func CreateZvol(zpoolName, zvolName string) error {
 
 	props := make(map[zfs.Prop]zfs.Property)
@@ -60,6 +83,11 @@ func CreateZvol(zpoolName, zvolName string) error {
 		return fmt.Errorf("Failed to create zvol: %w", err)
 	}
 	defer dataset.Close()
+
+	return nil
+}
+
+func DestroyZvol(zpoolName, zvolName string) error {
 
 	return nil
 }
@@ -199,15 +227,12 @@ func GenerateNaaSerial() string {
 }
 
 func SetupVhost(devicePath, iblockId string) (string, error) {
-//FIX ME params
-	devicePath = "/dev/zvol/tank/test-zvol"
-	iblockId = "test_iblock"
 	serial := GenerateNaaSerial()
 	wwn := fmt.Sprintf("naa.%s", serial)
-	err := TargetCreateIBlock(device, iblockId, serial)
+	err := TargetCreateIBlock(devicePath, iblockId, serial)
 	if err != nil {
 		return "", fmt.Errorf("TargetCreateFileIODev(%s, %s, %s): %v",
-			device, iblockId, serial, err)
+							  devicePath, iblockId, serial, err)
 	}
 	exists,err := IsVhostIblockExist(iblockId)
 	if !exists {

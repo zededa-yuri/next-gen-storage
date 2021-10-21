@@ -15,6 +15,7 @@ import (
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/fiotests"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/qemutmp"
+	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/vhostzfs"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -55,13 +56,21 @@ type VirtM struct {
 	imgPath    string
 	userImg    string
 	resultPath string
+	zfsvolname string
+	iblockId   string
+	zfsDevice  string
 }
 
 type VMlist []*VirtM
 
-func writeMainConfig(path string, template_args VmConfig) error {
+func writeMainConfig(path string, template_args VmConfig, zfsType bool) error {
 	// FIX ME vhost issue
-	t, err := template.New("qemu").Parse(qemutmp.QemuConfTemplate)
+	var curentTmp = qemutmp.QemuConfTemplate
+	if (zfsType) {
+		curentTmp = qemutmp.QemuConfVhostTemplate
+	}
+
+	t, err := template.New("qemu").Parse(curentTmp)
 	if err != nil {
 		fmt.Printf("failed parse template%v\n", err)
 		return err
@@ -174,6 +183,9 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		vm.ctx, vm.cancel = context.WithTimeout(ctx, totalTime)
 		vm.port = qemuCmd.CPort + i
 		vm.timeOut = totalTime
+		vm.zfsvolname = fmt.Sprintf("vm%d", vm.port)
+		vm.zfsDevice = filepath.Join("/dev/zvol/", "fiotest/", vm.zfsvolname) // /dev/zvol/tank/test-zvol
+		vm.iblockId = fmt.Sprintf("fiotest%d_iblock", vm.port)
 		vm.userImg = filepath.Join(getSelfPath(), "user-data.img")
 		vm.imgPath, err = getVMImage(i, qemuCmd.CFileLocation)
 		if err != nil {
@@ -190,20 +202,40 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 			return fmt.Errorf("could not create local dir:[%s] for result: %w", vm.resultPath, err)
 		}
 
-		// FIX ME Create zfs volume and wwn for this VM
-
-		templateArgs := VmConfig{
-			FileLocation: qemuCmd.CFileLocation,
-			Format:       qemuCmd.CFormat,
-			VCpus:        qemuCmd.CVCpus,
-			Memory:       qemuCmd.CMemory,
-			Password:     qemuCmd.CPassword,
-			//VhostWWPN:    VhostWWPN, //FIX ME
-		}
-		//FIX ME add if for checge temlate
-		err = writeMainConfig(filepath.Join(vm.resultPath, "qemu.cfg"), templateArgs)
-		if err != nil {
-			return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPath, err)
+		if (qemuCmd.CZfs) {
+			if err := vhostzfs.CreateZvol("fiotest", vm.zfsvolname); err != nil {
+				return fmt.Errorf("create zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
+								  vm.zfsvolname, vm.port, err)
+			}
+			vhostWWN, err := vhostzfs.SetupVhost(vm.zfsDevice, vm.iblockId)
+			if err != nil {
+				return fmt.Errorf("create VHOST for zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
+								  vm.zfsvolname, vm.port, err)
+			}
+			templateArgs := VmConfig{
+				FileLocation: qemuCmd.CFileLocation,
+				Format:       qemuCmd.CFormat,
+				VCpus:        qemuCmd.CVCpus,
+				Memory:       qemuCmd.CMemory,
+				Password:     qemuCmd.CPassword,
+				VhostWWPN:    vhostWWN,
+			}
+			err = writeMainConfig(filepath.Join(vm.resultPath, "qemu.cfg"), templateArgs, true)
+			if err != nil {
+				return fmt.Errorf("copy qemu vhost config to:[%s] failed! err:%v", vm.resultPath, err)
+			}
+		} else {
+			templateArgs := VmConfig{
+				FileLocation: qemuCmd.CFileLocation,
+				Format:       qemuCmd.CFormat,
+				VCpus:        qemuCmd.CVCpus,
+				Memory:       qemuCmd.CMemory,
+				Password:     qemuCmd.CPassword,
+			}
+			err = writeMainConfig(filepath.Join(vm.resultPath, "qemu.cfg"), templateArgs, false)
+			if err != nil {
+				return fmt.Errorf("copy qemu config to:[%s] failed! err:%v", vm.resultPath, err)
+			}
 		}
 
 		go qemuVmRun(vm.ctx, vm, filepath.Join(vm.resultPath, "qemu.cfg"))
@@ -260,6 +292,11 @@ func (t VMlist) FreeVM() {
 		if err := os.Remove(vm.userImg); err != nil {
 			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
 		}
+		if (qemuCmd.CZfs) {
+			if err := vhostzfs.DestroyZvol("fiotest", vm.zfsvolname); err != nil {
+				log.Printf("Remove zvol: %s failed! err:%v", vm.zfsvolname, err)
+			}
+		}
 	}
 }
 
@@ -280,24 +317,26 @@ func fio(virt *VirtM, localResultsFolder,
 
 // RunCommand - Starts the testing process for qemu target
 func RunCommand(ctx context.Context, virtM VMlist) error {
-	err := InitFioOptions()
-	if err != nil {
+	if err := InitFioOptions(); err != nil {
 		return fmt.Errorf("error get fio params: %w", err)
 	}
 
 	var countTests = mkconfig.CountTests(FioOptions)
 	const bufferTime = 3 * time.Minute
 	var totalTime = time.Duration(int64(countTests)*int64(60*time.Second) + int64(bufferTime))
-	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
 
-	if qemuCmd.CZfs {
-		// Check zfs in curent system!
-		// Check iblok sysfs dir
-		// FIX ME
-		// create zfs tunk here via get device, example /dev/sdb
+	if (qemuCmd.CZfs && qemuCmd.CZfsTarget != "") {
+		if err := vhostzfs.CheckZfsOnSystem(); err != nil {
+			return fmt.Errorf("ZFS not found: %v", err)
+		}
+		// FIX ME Check iblok sysfs dir
+		if err := vhostzfs.CreateZpool("fiotest", qemuCmd.CZfsTarget); err != nil {
+			return fmt.Errorf("Create zpool failed: %v", err)
+		}
 	}
 
-	err = virtM.AllocateVM(ctxVMs, totalTime)
+	ctxVMs, cancelVMS := context.WithTimeout(ctx, totalTime)
+	err := virtM.AllocateVM(ctxVMs, totalTime)
 	if err != nil {
 		cancelVMS()
 		return fmt.Errorf("VM create in QEMU failed err:%v", err)
@@ -337,6 +376,11 @@ there:
 	fmt.Println("All FIO tests finished!")
 	virtM.FreeVM()
 	cancelVMS()
+	if (qemuCmd.CZfs) {
+		if err := vhostzfs.DestroyZpool("fiotest"); err != nil {
+			fmt.Println("Destroy zpool failed", err)
+		}
+	}
 	return nil
 }
 
