@@ -64,7 +64,6 @@ type VirtM struct {
 type VMlist []*VirtM
 
 func writeMainConfig(path string, template_args VmConfig, zfsType bool) error {
-	// FIX ME vhost issue
 	var curentTmp = qemutmp.QemuConfTemplate
 	if (zfsType) {
 		curentTmp = qemutmp.QemuConfVhostTemplate
@@ -259,7 +258,8 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 				break
 			}
 			if vm.ctx.Err() == context.Canceled || vm.ctx.Err() == context.DeadlineExceeded {
-				return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, vm.ctx.Err())
+				return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v",
+									vm.port, vm.ctx.Err())
 			}
 			time.Sleep(3 * time.Second)
 		}
@@ -309,7 +309,8 @@ func fio(virt *VirtM, localResultsFolder,
 	if err := fiotests.RunFIOTest(virt.sshClient, qemuCmd.CUser, localResultsFolder,
 		virt.resultPath, targetDevice, fioOptions,
 		fioTestTime); err != nil {
-		log.Printf("FIO tests failed on VM [%s]: error: %v", fmt.Sprintf("localhost:%d", virt.port), err)
+		log.Printf("FIO tests failed on VM [%s]: error: %v",
+					fmt.Sprintf("localhost:%d", virt.port), err)
 		testFailed <- true
 	}
 	log.Printf("Test on a VM with port: %d finished! Wait for VM to complete.", virt.port)
