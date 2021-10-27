@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	zfs "github.com/bicomsystems/go-libzfs"
+	zfs "github.com/vk-en/go-libzfs"
 )
 
 func CheckZfsOnSystem() error {
-	output, err := exec.Command("zfs version").CombinedOutput()
+	output, err := exec.Command("zfs", "version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to collect hardware data! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("Failed to collect tools data! output:[%s] err:[%w]", output, err)
 	}
 	return nil
 }
@@ -49,6 +49,7 @@ func CreateZpool(zpoolName, targetDisk string) ( error) {
 	if err != nil {
 		return fmt.Errorf("Failed to create zpool: %w", err)
 	}
+
 	defer pool.Close()
 
 	return nil

@@ -3,7 +3,7 @@ module github.com/zededa-yuri/nextgen-storage/autobench
 go 1.16
 
 require (
-	github.com/bicomsystems/go-libzfs v0.3.5
+	github.com/vk-en/go-libzfs v0.4.0
 	github.com/jessevdk/go-flags v1.5.0
 	github.com/pkg/sftp v1.13.2
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97
