@@ -21,7 +21,10 @@ func CheckZfsOnSystem() error {
 	return nil
 }
 
-func CreateZpool(zpoolName, targetDisk string) ( error) {
+// Write a function to handle partitioning disks
+
+// CreateZpool for update option 
+func CreateZpool(zpoolName, targetDisk string) (error) {
 	var vdev zfs.VDevTree
 	var vdevs, mdevs []zfs.VDevTree
 
@@ -42,12 +45,16 @@ func CreateZpool(zpoolName, targetDisk string) ( error) {
 	fsprops[zfs.DatasetPropMountpoint] = "none"
 
 	// Enable some features
-/* 	features["async_destroy"] = "enabled"
+ 	features["async_destroy"] = "enabled"
 	features["empty_bpobj"] = "enabled"
-	features["lz4_compress"] = "enabled" */
+	features["lz4_compress"] = "enabled"
 	pool, err := zfs.PoolCreate(zpoolName, vdev, features, props, fsprops)
 	if err != nil {
-		return fmt.Errorf("Failed to create zpool: %w", err)
+		// Workaround if something went wrong with specifying parameters
+		output, err := exec.Command("zpool", "create", "-fd", zpoolName).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Failed to create zpool: err:[%w] output:[%s]", err, output)
+		}
 	}
 
 	defer pool.Close()
