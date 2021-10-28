@@ -23,7 +23,7 @@ func CheckZfsOnSystem() error {
 
 // Write a function to handle partitioning disks
 
-// CreateZpool for update option 
+// CreateZpool for update option
 func CreateZpool(zpoolName, targetDisk string) (error) {
 	var vdev zfs.VDevTree
 	var vdevs, mdevs []zfs.VDevTree
@@ -51,7 +51,7 @@ func CreateZpool(zpoolName, targetDisk string) (error) {
 	pool, err := zfs.PoolCreate(zpoolName, vdev, features, props, fsprops)
 	if err != nil {
 		// Workaround if something went wrong with specifying parameters
-		output, err := exec.Command("zpool", "create", "-fd", zpoolName).CombinedOutput()
+		output, err := exec.Command("zpool", "create", "-fd", zpoolName, targetDisk).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("Failed to create zpool: err:[%w] output:[%s]", err, output)
 		}
@@ -96,7 +96,15 @@ func CreateZvol(zpoolName, zvolName string) error {
 }
 
 func DestroyZvol(zpoolName, zvolName string) error {
-
+	destroyPath := filepath.Join(zpoolName, zvolName)
+	d, err := zfs.DatasetOpen(destroyPath)
+	if err != nil {
+		return fmt.Errorf("Failed to destroy zvol (open): %w", err)
+	}
+	defer d.Close()
+	if err = d.Destroy(false); err != nil {
+		return fmt.Errorf("Failed to destroy zvol: %w", err)
+	}
 	return nil
 }
 
