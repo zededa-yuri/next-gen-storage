@@ -1,4 +1,4 @@
-package vhostzfs
+package vhost
 
 import (
 	"fmt"
@@ -13,10 +13,102 @@ import (
 	zfs "github.com/vk-en/go-libzfs"
 )
 
+// PVcreate - Use PVcreate to mark disk as LVM physical volumes
+func PVcreate(diskPath string) error {
+	//pvcreate /dev/sdb1
+	output, err := exec.Command("pvcreate", diskPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to pvcreate: err:[%w] output:[%s]", err, output)
+	}
+
+	return nil
+}
+
+// VGcreate - Make LVM physical volumes into volume groups
+func VGcreate(diskPath, vgName string) error {
+	// vgcreate testvg /dev/sdb1
+	output, err := exec.Command("vgcreate", vgName, diskPath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to vgcreate: err:[%w] output:[%s]", err, output)
+	}
+
+	return nil
+}
+
+// LVcreate - Create a logical volume on the volume group
+func LVcreate(lvName, vgName string) error {
+	// lvcreate -L 50G --name testlv testvg
+	output, err := exec.Command("lvcreate", "-L",
+								"50G", "--name",
+								lvName, vgName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to LVcreate: err:[%w] output:[%s]", err, output)
+	}
+
+	return nil
+}
+
+// PVremove - Use LVremove to remove the disk from as LVM physical volumes
+func PVremove(targetDisk string) error {
+	//pvremove /dev/sdb1
+	output, err := exec.Command("pvremove", "-y", targetDisk).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to pvremove: err:[%w] output:[%s]", err, output)
+	}
+	return nil
+}
+
+// VGremove - Remove volume groups
+func VGremove(vgName string) error {
+	//vgremove testvg
+	output, err := exec.Command("vgremove", "-y", vgName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to vgremove: err:[%w] output:[%s]", err, output)
+	}
+	return nil
+}
+
+// LVremove - remove a logical volume
+func LVremove(lvName, vgName string) error {
+	//lvremove /dev/testvg/testlv
+	lvpath := filepath.Join("/dev/", vgName, lvName)
+	output, err := exec.Command("lvremove", "-y", lvpath).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to lvremove: err:[%w] output:[%s]", err, output)
+	}
+	return nil
+}
+
+// DestroyLvm - Remove volume groups and marker LVM on physical volumes
+func DestroyLvm(targetDisk, vgName string) error {
+	if err := VGremove(vgName); err != nil {
+		return fmt.Errorf("VGremove failed err:[%w]", err)
+	}
+
+	if err := PVremove(targetDisk); err != nil {
+		return fmt.Errorf("PVremove failed err:[%w]", err)
+	}
+	return nil
+}
+
+func CheckLvmOnSystem() error {
+	output, err := exec.Command("lvm", "version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to collect tools data (lvm)! output:[%s] err:[%w]", output, err)
+	}
+	if _, err := os.Stat(tgtPath); err != nil {
+		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
+	}
+	return nil
+}
+
 func CheckZfsOnSystem() error {
 	output, err := exec.Command("zfs", "version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to collect tools data! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("Failed to collect tools data (zfs)! output:[%s] err:[%w]", output, err)
+	}
+	if _, err := os.Stat(tgtPath); err != nil {
+		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
 	}
 	return nil
 }
