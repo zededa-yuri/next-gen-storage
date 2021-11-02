@@ -309,6 +309,13 @@ func (t VMlist) FreeVM() {
 		}
 
 		if qemuCmd.CZfs || qemuCmd.CLvm{
+			if err := vhost.VHostDeleteIBlock(vm.wwnAdress); err != nil {
+				log.Printf("Remove VHOST wwn: %s failed! err:%v", vm.wwnAdress, err)
+			}
+			if err := vhost.TargetDeleteIBlock(vm.iblockId); err != nil {
+				log.Printf("Remove Target: %s failed! err:%v", vm.iblockId, err)
+			}
+			
 			if qemuCmd.CZfs {
 				if err := vhost.DestroyZvol("fiotest", vm.shareVolName); err != nil {
 					log.Printf("Remove zvol: %s failed! err:%v", vm.shareVolName, err)
@@ -317,12 +324,6 @@ func (t VMlist) FreeVM() {
 				if err := vhost.LVremove(vm.shareVolName, "fiotest"); err != nil {
 					log.Printf("LVremove %s failed err:%v", vm.shareVolName, err)
 				}
-			}
-			if err := vhost.VHostDeleteIBlock(vm.wwnAdress); err != nil {
-				log.Printf("Remove VHOST wwn: %s failed! err:%v", vm.wwnAdress, err)
-			}
-			if err := vhost.TargetDeleteIBlock(vm.iblockId); err != nil {
-				log.Printf("Remove Target: %s failed! err:%v", vm.iblockId, err)
 			}
 		}
 	}
