@@ -28,7 +28,7 @@ type QemuCommand struct {
 	CMemory        string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
 	CPassword      string `short:"x" long:"password" description:"Format options " default:"asdfqwer"`
 	CPort          int    `short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
-	CCountVM       int    `short:"n" long:"number" description:"Count create VM" default:"1"`
+	CCountVM       int    `short:"n" long:"vmcount" description:"Count create VM" default:"1"`
 	CZfs           bool   `short:"z" long:"zfs" description:"Create zfs volume and share to vm via VHost"`
 	CTargetDisk    string `short:"d" long:"disktarget" description:"Path to device for create zpool or lvm"`
 	CLvm           bool   `short:"l" long:"lvm" description:"Create lvm volume and share to vm via VHost"`
@@ -61,6 +61,7 @@ type VirtM struct {
 	iblockId     string
 	zfsDevice    string
 	lvmDevice    string
+	wwnAdress	 string
 }
 
 type VMlist []*VirtM
@@ -205,19 +206,18 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		}
 
 		if qemuCmd.CZfs || qemuCmd.CLvm {
-			var vhostWWN string
 			if qemuCmd.CZfs {
 				if err := vhost.CreateZvol("fiotest", vm.shareVolName); err != nil {
 					return fmt.Errorf("create zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}
-				vhostWWN, err = vhost.SetupVhost(vm.zfsDevice, vm.iblockId)
+				vm.wwnAdress, err = vhost.SetupVhost(vm.zfsDevice, vm.iblockId)
 			} else {
 				if err := vhost.LVcreate(vm.shareVolName, "fiotest"); err != nil {
 					return fmt.Errorf("create lvmVol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}
-				vhostWWN, err = vhost.SetupVhost(vm.lvmDevice, vm.iblockId)
+				vm.wwnAdress, err = vhost.SetupVhost(vm.lvmDevice, vm.iblockId)
 			}
 			if err != nil {
 				return fmt.Errorf("create VHOST for vol:[%s] for VM with adress localhost:%d failed! err:\n%v",
@@ -230,7 +230,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 				VCpus:        qemuCmd.CVCpus,
 				Memory:       qemuCmd.CMemory,
 				Password:     qemuCmd.CPassword,
-				VhostWWPN:    vhostWWN,
+				VhostWWPN:    vm.wwnAdress,
 			}
 			if err := writeMainConfig(filepath.Join(vm.resultPath, "qemu.cfg"),
 									  templateArgs, true); err != nil {
@@ -307,14 +307,22 @@ func (t VMlist) FreeVM() {
 		if err := os.Remove(vm.userImg); err != nil {
 			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
 		}
-		if qemuCmd.CZfs {
-			if err := vhost.DestroyZvol("fiotest", vm.shareVolName); err != nil {
-				log.Printf("Remove zvol: %s failed! err:%v", vm.shareVolName, err)
+
+		if qemuCmd.CZfs || qemuCmd.CLvm{
+			if qemuCmd.CZfs {
+				if err := vhost.DestroyZvol("fiotest", vm.shareVolName); err != nil {
+					log.Printf("Remove zvol: %s failed! err:%v", vm.shareVolName, err)
+				}
+			} else {
+				if err := vhost.LVremove(vm.shareVolName, "fiotest"); err != nil {
+					log.Printf("LVremove %s failed err:%v", vm.shareVolName, err)
+				}
 			}
-		}
-		if qemuCmd.CLvm {
-			if err := vhost.LVremove(vm.shareVolName, "fiotest"); err != nil {
-				log.Printf("LVremove %s failed err:%v", vm.shareVolName, err)
+			if err := vhost.VHostDeleteIBlock(vm.wwnAdress); err != nil {
+				log.Printf("Remove VHOST wwn: %s failed! err:%v", vm.wwnAdress, err)
+			}
+			if err := vhost.TargetDeleteIBlock(vm.iblockId); err != nil {
+				log.Printf("Remove Target: %s failed! err:%v", vm.iblockId, err)
 			}
 		}
 	}
