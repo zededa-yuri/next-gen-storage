@@ -9,6 +9,8 @@ github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+o
 github.com/kr/fs v0.1.0 h1:Jskdu9ieNAYnjxsi0LbQp1ulIKZV1LAFgK1tWhpZgl8=
 github.com/kr/fs v0.1.0/go.mod h1:FFnZGqtBN9Gxj7eW1uZ42v5BccTP0vu6NEaFoC2HwRg=
 github.com/lunixbochs/struc v0.0.0-20180408203800-02e4c2afbb2a/go.mod h1:iOJu9pApjjmEmNq7PqlA5R9mDu/HMF5EM3llWKX/TyA=
+github.com/nak3/go-lvm v0.0.0-20171011124118-3bc94854c09e h1:aGhX7DvoYmtMYZIqhyx+stSrwuRazCOtuTlGbceIgPM=
+github.com/nak3/go-lvm v0.0.0-20171011124118-3bc94854c09e/go.mod h1:P/WpBmLmLrreHJ2h9Iz83YDmoyApJo1DANhOsMFt9K0=
 github.com/pkg/sftp v1.13.2 h1:taJnKntsWgU+qae21Rx52lIwndAdKrj0mfUNQsz1z4Q=
 github.com/pkg/sftp v1.13.2/go.mod h1:LzqnAvaD5TWeNBsZpfKxSYn1MbjWwOsCIAFFJbpIsK8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
