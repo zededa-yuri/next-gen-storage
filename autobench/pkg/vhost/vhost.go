@@ -91,13 +91,26 @@ func DestroyLvm(targetDisk, vgName string) error {
 	return nil
 }
 
+func CheckConfigFS() error {
+	if _, err := os.Stat(tgtPath); err != nil {
+		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
+	}
+	if _, err := os.Stat(corePath); err != nil {
+		return fmt.Errorf("Target core access error (%s): %s", corePath, err)
+	}
+	if _, err := os.Stat(vhostPath); err != nil {
+		return fmt.Errorf("VHOST access error (%s): %s", vhostPath, err)
+	}
+	return nil
+}
+
 func CheckLvmOnSystem() error {
 	output, err := exec.Command("lvm", "version").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Failed to collect tools data (lvm)! output:[%s] err:[%w]", output, err)
 	}
-	if _, err := os.Stat(tgtPath); err != nil {
-		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
+	if err := CheckConfigFS(); err != nil {
+		return fmt.Errorf("Failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
 	}
 	return nil
 }
@@ -107,8 +120,8 @@ func CheckZfsOnSystem() error {
 	if err != nil {
 		return fmt.Errorf("Failed to collect tools data (zfs)! output:[%s] err:[%w]", output, err)
 	}
-	if _, err := os.Stat(tgtPath); err != nil {
-		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
+	if err := CheckConfigFS(); err != nil {
+		return fmt.Errorf("Failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
 	}
 	return nil
 }
@@ -224,6 +237,8 @@ func waitForFile(fileName string) error {
 }
 
 const (
+	vhostPath  = "/sys/kernel/config/target/vhost/"
+	corePath   = "/sys/kernel/config/target/core/"
 	tgtPath    = "/sys/kernel/config/target"
 	iBlockPath = tgtPath + "/core/iblock_0"
 	naaPrefix  = "5001405" // from rtslib-fb
@@ -298,6 +313,18 @@ func TargetCreateIBlock(dev, tgtName, serial string) error {
 	}
 	if err := ioutil.WriteFile(filepath.Join(targetRoot, "enable"), []byte("1"), 0660); err != nil {
 		return fmt.Errorf("error set enable: %v", err)
+	}
+	return nil
+}
+
+// TargetDeleteIBlock - Delete iblock target
+func TargetDeleteIBlock(tgtName string) error {
+	targetRoot := filepath.Join(iBlockPath, tgtName)
+	if _, err := os.Stat(targetRoot); os.IsNotExist(err) {
+		return fmt.Errorf("tgt do not exists for tgtName %s: %s", tgtName, err)
+	}
+	if err := os.RemoveAll(targetRoot); err != nil {
+		return fmt.Errorf("error delete tgt: %v", err)
 	}
 	return nil
 }
