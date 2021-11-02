@@ -15,7 +15,7 @@ size=1G
 direct=1
 runtime=%s
 time_based=1
-group_reporting
+group_reporting=1
 filename=%s
 log_avg_msec=20
 per_job_logs=0
@@ -30,7 +30,7 @@ runtime=%s
 verify=%s
 verify_fatal=1
 time_based=1
-group_reporting
+group_reporting=1
 filename=%s
 log_avg_msec=20
 per_job_logs=0

@@ -301,21 +301,23 @@ func (t VMlist) FreeVM() {
 	for _, vm := range t {
 		vm.sshClient.Close()
 		vm.cancel()
-		if err := os.Remove(vm.imgPath); err != nil {
-			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
-		}
-		if err := os.Remove(vm.userImg); err != nil {
-			log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
+		//If we have only one VM we shouldn't delete img`s
+		if qemuCmd.CCountVM > 1 {
+			if err := os.Remove(vm.imgPath); err != nil {
+				log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
+			}
+			if err := os.Remove(vm.userImg); err != nil {
+				log.Printf("Remove %s failed! err:%v", vm.imgPath, err)
+			}
 		}
 
-		if qemuCmd.CZfs || qemuCmd.CLvm{
+		if qemuCmd.CZfs || qemuCmd.CLvm {
 			if err := vhost.VHostDeleteIBlock(vm.wwnAdress); err != nil {
 				log.Printf("Remove VHOST wwn: %s failed! err:%v", vm.wwnAdress, err)
 			}
 			if err := vhost.TargetDeleteIBlock(vm.iblockId); err != nil {
 				log.Printf("Remove Target: %s failed! err:%v", vm.iblockId, err)
 			}
-			
 			if qemuCmd.CZfs {
 				if err := vhost.DestroyZvol("fiotest", vm.shareVolName); err != nil {
 					log.Printf("Remove zvol: %s failed! err:%v", vm.shareVolName, err)
