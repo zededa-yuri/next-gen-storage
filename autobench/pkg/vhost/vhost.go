@@ -171,12 +171,16 @@ func DestroyZpool(zpoolName string) error {
 	// Need handle to pool at first place
 	p, err := zfs.PoolOpen(zpoolName)
 	if err != nil {
-		return fmt.Errorf("Failed to open zpool: %w", err)
+		fmt.Println("Failed to open zpool(open API): %w", err)
 	}
 	defer p.Close()
-
+	//zpool destroy fiotest
 	if err = p.Destroy(fmt.Sprintf("Pool %s destruction was successful", zpoolName)); err != nil {
-		return fmt.Errorf("Failed to destroy zpool %s: err:%w", zpoolName, err)
+		fmt.Println("Failed to destroy zpool (open API)", zpoolName, err)
+	}
+	output, err := exec.Command("zpool", "destroy", zpoolName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
 
 	return nil
@@ -193,7 +197,13 @@ func CreateZvol(zpoolName, zvolName string) error {
 	dataset, err := zfs.DatasetCreate(fmt.Sprintf("%s/%s", zpoolName, zvolName),
 									  zfs.DatasetTypeVolume, props)
 	if err != nil {
-		return fmt.Errorf("Failed to create zvol: %w", err)
+		//zfs create -V 1G tank/disk1
+		output, err := exec.Command("zfs", "create", "-V", "50G",
+		 							fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("Failed to create zvol: log:%s err:%w", output, err)
+		}
+
 	}
 	defer dataset.Close()
 
@@ -204,11 +214,16 @@ func DestroyZvol(zpoolName, zvolName string) error {
 	destroyPath := filepath.Join(zpoolName, zvolName)
 	d, err := zfs.DatasetOpen(destroyPath)
 	if err != nil {
-		return fmt.Errorf("Failed to destroy zvol (open): %w", err)
+		fmt.Println("Failed to destroy zvol (open API):", err)
 	}
 	defer d.Close()
 	if err = d.Destroy(false); err != nil {
-		return fmt.Errorf("Failed to destroy zvol: %w", err)
+		fmt.Println("Failed to destroy zvol(open API):", err)
+	}
+
+	output, err := exec.Command("zfs", "destroy", fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
