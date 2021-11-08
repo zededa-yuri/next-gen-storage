@@ -91,7 +91,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 
 	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
 	fioRunCmd := fmt.Sprintf(
-		"fio %s --output-format=normal,json > %s & ",
+		"sudo fio %s --output-format=normal,json > %s & ",
 		filepath.Join(remoteResultsAbsDir, "/fio_config.cfg"),
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	)
