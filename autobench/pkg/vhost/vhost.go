@@ -169,15 +169,6 @@ func CreateZpool(zpoolName, targetDisk string) (error) {
 
 func DestroyZpool(zpoolName string) error {
 	// Need handle to pool at first place
-	p, err := zfs.PoolOpen(zpoolName)
-	if err != nil {
-		fmt.Println("Failed to open zpool(open API): %w", err)
-	}
-	defer p.Close()
-	//zpool destroy fiotest
-	if err = p.Destroy(fmt.Sprintf("Pool %s destruction was successful", zpoolName)); err != nil {
-		fmt.Println("Failed to destroy zpool (open API)", zpoolName, err)
-	}
 	output, err := exec.Command("zpool", "destroy", zpoolName).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
