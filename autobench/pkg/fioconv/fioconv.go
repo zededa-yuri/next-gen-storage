@@ -93,7 +93,7 @@ func mbps(x int) float64 {
 
 func formatCSV(in fioJSON, to io.Writer) error {
 	var header = []string{
-		"Group ID", "Pattern", "Block Size", "IO Depth", "Jobs", "Mb/s",
+		"Group ID", "Pattern", "Block Size", "IO Depth", "Jobs", "Mib/s",
 	}
 
 	var w = csv.NewWriter(to)
