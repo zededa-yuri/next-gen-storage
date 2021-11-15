@@ -135,7 +135,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		filepath.Join(localResultsAbsDir, "/result.json"),
 		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
 	); err != nil {
-		return fmt.Errorf("could not convert JSON to CSV: %w", err)
+		fmt.Println("Attention! Could not convert JSON to CSV:", err)
 	}
 
 	if err := sshwork.SendCommandSSH(
@@ -268,7 +268,7 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 		filepath.Join(localResultsAbsDir, "/result.json"),
 		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
 	); err != nil {
-		return fmt.Errorf("could not convert JSON to CSV: %w", err)
+		fmt.Println("Attention! Could not convert JSON to CSV: %w", err)
 	}
 
 	// Save local dmesg file
