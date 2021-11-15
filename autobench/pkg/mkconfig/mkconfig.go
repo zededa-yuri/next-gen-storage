@@ -76,7 +76,7 @@ func (t *OpType) Set(v string) error {
 	var val = strings.Split(v, ",")
 	*t = []string{}
 
-	var valid = []string{"read", "write", "randread", "randwrite", "readwrite", "randrw", "rw", "trim", "randtrim"}
+	var valid = []string{"read", "write", "randread", "randwrite", "trim", "randtrim"}
 	for _, s := range val {
 		if !Contains(valid, s) {
 			return fmt.Errorf("Invalid value for operation type: %s\n\tUse something from this list: %v\n", s, valid)

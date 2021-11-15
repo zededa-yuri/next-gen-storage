@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	zfs "github.com/vk-en/go-libzfs"
 )
 
 // PVcreate - Use PVcreate to mark disk as LVM physical volumes
@@ -93,7 +91,7 @@ func DestroyLvm(targetDisk, vgName string) error {
 
 func CheckConfigFS() error {
 	if _, err := os.Stat(tgtPath); err != nil {
-		return fmt.Errorf("Target access error (%s): %s", tgtPath, err)
+		return fmt.Errorf("Target access error (%s): %v", tgtPath, err)
 	}
 	if _, err := os.Stat(corePath); err != nil {
 		return fmt.Errorf("Target core access error (%s): %s", corePath, err)
@@ -130,40 +128,11 @@ func CheckZfsOnSystem() error {
 
 // CreateZpool for update option
 func CreateZpool(zpoolName, targetDisk string) (error) {
-	var vdev zfs.VDevTree
-	var vdevs, mdevs []zfs.VDevTree
-
-	// build device specs
-	mdevs = append(mdevs, zfs.VDevTree{Type: zfs.VDevTypeDisk, Path: targetDisk})
-
-	// pool specs
-	vdevs = []zfs.VDevTree{
-		{Type: zfs.VDevTypeDisk, Devices: mdevs},
-	}
-
-	vdev.Devices = vdevs
-	props := make(map[zfs.Prop]string) // pool properties
-	fsprops := make(map[zfs.Prop]string) // root dataset filesystem properties
-	features := make(map[string]string) // pool features
-
-	// Turn off auto mounting by ZFS
-	fsprops[zfs.DatasetPropMountpoint] = "none"
-
-	// Enable some features
- 	features["async_destroy"] = "enabled"
-	features["empty_bpobj"] = "enabled"
-	features["lz4_compress"] = "enabled"
-	pool, err := zfs.PoolCreate(zpoolName, vdev, features, props, fsprops)
+	// Workaround if something went wrong with specifying parameters
+	output, err := exec.Command("zpool", "create", "-fd", zpoolName, targetDisk).CombinedOutput()
 	if err != nil {
-		// Workaround if something went wrong with specifying parameters
-		output, err := exec.Command("zpool", "create", "-fd", zpoolName, targetDisk).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("Failed to create zpool: err:[%w] output:[%s]", err, output)
-		}
+		return fmt.Errorf("Failed to create zpool: err:[%w] output:[%s]", err, output)
 	}
-
-	defer pool.Close()
-
 	return nil
 }
 
@@ -171,50 +140,26 @@ func DestroyZpool(zpoolName string) error {
 	// Need handle to pool at first place
 	output, err := exec.Command("zpool", "destroy", zpoolName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
+		fmt.Printf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
-
 	return nil
 }
 
 func CreateZvol(zpoolName, zvolName string) error {
-
-	props := make(map[zfs.Prop]zfs.Property)
-	strSize := fmt.Sprintf("%d", 1024*1024*1024*50) // 50Gb
-	props[zfs.DatasetPropVolsize] = zfs.Property{Value: strSize}
-	props[zfs.DatasetPropVolblocksize] = zfs.Property{Value: fmt.Sprintf("%d", 16*1024)}
-	props[zfs.DatasetPropReservation] = zfs.Property{Value: strSize}
-
-	dataset, err := zfs.DatasetCreate(fmt.Sprintf("%s/%s", zpoolName, zvolName),
-									  zfs.DatasetTypeVolume, props)
+	//zfs create -V 1G tank/disk1
+	output, err := exec.Command("zfs", "create", "-V", "50G",
+	 							fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
-		//zfs create -V 1G tank/disk1
-		output, err := exec.Command("zfs", "create", "-V", "50G",
-		 							fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("Failed to create zvol: log:%s err:%w", output, err)
-		}
-
+		return fmt.Errorf("Failed to create zvol: log:%s err:%w", output, err)
 	}
-	defer dataset.Close()
-
 	return nil
 }
 
 func DestroyZvol(zpoolName, zvolName string) error {
-	destroyPath := filepath.Join(zpoolName, zvolName)
-	d, err := zfs.DatasetOpen(destroyPath)
+	output, err := exec.Command("zfs", "destroy",
+					fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
-		fmt.Println("Failed to destroy zvol (open API):", err)
-	}
-	defer d.Close()
-	if err = d.Destroy(false); err != nil {
-		fmt.Println("Failed to destroy zvol(open API):", err)
-	}
-
-	output, err := exec.Command("zfs", "destroy", fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
+		fmt.Printf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }

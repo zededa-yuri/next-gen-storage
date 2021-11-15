@@ -13,6 +13,14 @@ import (
 	"os"
 )
 
+type LatNS struct {
+	Min        int64            `json:"min"`
+	Max        int64            `json:"max"`
+	Mean       float64          `json:"mean"`
+	Stddev     float64          `json:"stddev"`
+	Percentile map[string]int64 `json:"percentile,omitempty"`
+}
+
 type fioJSON struct {
 	FioVersion   string `json:"fio version"`
 	GlobalConfig struct {
@@ -27,12 +35,17 @@ type fioJSON struct {
 			BS      string `json:"bs"`
 			IODepth string `json:"iodepth"`
 			NumJobs string `json:"numjobs"`
+			BwLog	string `json:"write_bw_log"`
+			IOPSLog	string `json:"write_iops_log"`
 		} `json:"job options"`
 		Read struct {
 			BW       int     `json:"bw"`
 			Iops     float64 `json:"iops"`
 			IoKbs    int     `json:"io_kbytes"`
 			Runtime  int     `json:"runtime"`
+			SlatNS   LatNS   `json:"slat_ns"`
+			ClatNS   LatNS   `json:"clat_ns"`
+			LatNS    LatNS   `json:"lat_ns"`
 			TotalIos int     `json:"total_ios"`
 			IopsMin  int     `json:"iops_min"`
 			IopsMax  int     `json:"iops_max"`
@@ -46,6 +59,9 @@ type fioJSON struct {
 			Iops     float64 `json:"iops"`
 			IoKbs    int     `json:"io_kbytes"`
 			Runtime  int     `json:"runtime"`
+			SlatNS   LatNS   `json:"slat_ns"`
+			ClatNS   LatNS   `json:"clat_ns"`
+			LatNS    LatNS   `json:"lat_ns"`
 			TotalIos int     `json:"total_ios"`
 			IopsMin  int     `json:"iops_min"`
 			IopsMax  int     `json:"iops_max"`
@@ -85,7 +101,8 @@ func parseJSON(in []byte) (fioJSON, error) {
 
 func toFixed(x float64, n int) float64 {
 	var l = math.Pow(10, float64(n))
-	return math.Round(x*l) / l
+	var mbs = math.Round(x*l) / l
+	return mbs * 1.049 // formula from google
 }
 func mbps(x int) float64 {
 	return toFixed(float64(x)/1024, 2)
@@ -93,7 +110,10 @@ func mbps(x int) float64 {
 
 func formatCSV(in fioJSON, to io.Writer) error {
 	var header = []string{
-		"Group ID", "Pattern", "Block Size", "IO Depth", "Jobs", "Mib/s",
+		"Group ID", "Pattern", "Block Size", "IO Depth", "Jobs",
+		"MB/s", "BWMim (KiB/s)", "BWMax (KiB/s)", "IOPS min", "IOPS max",
+		"Latency Min (ms)", "Latency Max (ms)", "Latency stddev (ms)",
+		"cLatency p99 (ms)",
 	}
 
 	var w = csv.NewWriter(to)
@@ -103,8 +123,25 @@ func formatCSV(in fioJSON, to io.Writer) error {
 
 	for _, v := range in.Jobs {
 		var bw = v.Write.BW
-		if v.TestOption.RW == "read" {
+		var bwMin = v.Write.BWMin
+		var bwMax = v.Write.BWMax
+		var iopsMin = v.Write.IopsMin
+		var iopsMax = v.Write.IopsMax
+		var latNsMin = float64(v.Write.LatNS.Min) / 1000000
+		var latNsMax = float64(v.Write.LatNS.Max) / 1000000
+		var latNsStdDev = v.Write.LatNS.Stddev / 1000000
+		var cLatNsPercent = float64(v.Write.ClatNS.Percentile["99.000000"]) / 1000000
+
+		if v.TestOption.RW == "read" || v.TestOption.RW == "randread" {
 			bw = v.Read.BW
+			bwMin = v.Read.BWMin
+			bwMax = v.Read.BWMax
+			iopsMin = v.Read.IopsMin
+			iopsMax = v.Read.IopsMax
+			latNsMin = float64(v.Read.LatNS.Min) / 1000000
+			latNsMax = float64(v.Read.LatNS.Max) / 1000000
+			latNsStdDev = v.Read.LatNS.Stddev / 1000000
+			cLatNsPercent = float64(v.Read.ClatNS.Percentile["99.000000"]) / 1000000
 		}
 		var row = []string{
 			fmt.Sprintf("%v", v.GroupID),
@@ -113,6 +150,15 @@ func formatCSV(in fioJSON, to io.Writer) error {
 			v.TestOption.IODepth,
 			v.TestOption.NumJobs,
 			fmt.Sprintf("%v", mbps(bw)),
+			fmt.Sprintf("%v", bwMin),
+			fmt.Sprintf("%v", bwMax),
+			fmt.Sprintf("%d",iopsMin),
+			fmt.Sprintf("%d",iopsMax),
+			fmt.Sprintf("%.2f", latNsMin),
+			fmt.Sprintf("%.2f", latNsMax),
+			fmt.Sprintf("%.2f", latNsStdDev),
+			fmt.Sprintf("%.2f", cLatNsPercent),
+
 		}
 		if err := w.Write(row); err != nil {
 			return err
@@ -120,7 +166,6 @@ func formatCSV(in fioJSON, to io.Writer) error {
 	}
 
 	w.Flush()
-
 	return nil
 }
 
