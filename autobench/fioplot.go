@@ -204,7 +204,6 @@ func getIdenticalPatterns(groups AllRes) ([]string, error) {
 	}
 
 	for key, val := range uniq {
-		fmt.Println(val, len(groups))
 		if val == len(groups) {
 			allPattern = append(allPattern, key)
 		}
