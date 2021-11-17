@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"io/ioutil"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,8 +19,10 @@ import (
 )
 
 type PlotCommand struct {
-	CCatalog  		string `short:"c" long:"catalog" description:"Catalog with CSV results" required:"true"`
-	CDescription	string `short:"d" long:"dsc" description:"Description for PNG image results" default:"https://zededa.com"`
+	CCatalog  		string	`short:"c" long:"catalog" description:"Catalog with CSV or Log results" required:"true"`
+	CBarCharts		bool 	`short:"b" long:"barcharts" description:"Generate Bar Charts from CSV files"`
+	CLogCharts		bool 	`short:"l" long:"logcharts" description:"Generate charts from log files"`
+	CDescription	string	`short:"d" long:"dsc" description:"Description for PNG image results" default:"https://zededa.com"`
 }
 
 var plotCmd PlotCommand
@@ -71,6 +74,18 @@ type allLegendResults struct {
 	fileName     string
 }
 
+// Logs have line from fio bw/IOPS/latency log file.  (Example: 15, 204800, 0, 0);
+// For bw log value == KiB/sec;
+// For IOPS log value == count Iops;
+// For Latency log value == latency in nsecs.
+type LogLine struct {
+	time     int // msec
+	value    int
+	opType   int // read - 0 ; write - 1 ; trim - 2
+}
+
+type LogFile []*LogLine
+
 type legensTable []*allLegendResults
 type patternsTable []*allPatternResults
 type AllRes []*listAllResults
@@ -87,6 +102,15 @@ const (
 	p99Lat
 )
 
+func toFixed(x float64, n int) float64 {
+	var l = math.Pow(10, float64(n))
+	var mbs = math.Round(x*l) / l
+	return mbs * 1.049 // formula from google
+}
+
+func mbps(x int) float64 {
+	return toFixed(float64(x)/1024, 2)
+}
 
 func (t *AllRes) parsingCSVfile(dir, fileName string) error {
 	filePath := filepath.Join(dir, fileName)
@@ -333,7 +357,7 @@ func (t *patternsTable) createBarCharts(table patternsTable, description, dirPat
 
 	width, height := countingSizeCanvas(len(table))
 
-	if err := p.Save(width, height, filepath.Join(dirPath, fmt.Sprintf("%s.png", lTable[0].fileName))); err != nil {
+	if err := p.Save(width, height, filepath.Join(dirPath, fmt.Sprintf("%s.svg", lTable[0].fileName))); err != nil {
 		return fmt.Errorf("generate BarCharts for failed! err:%v", err)
 	}
 	return nil
@@ -366,7 +390,7 @@ func (t *patternsTable) createBarChart(table patternsTable, description, dirPath
 			p.Legend.Add(pattern.legends[i], bars)
 		}
 		if err := p.Save(4*vg.Inch, 7*vg.Inch,
-			filepath.Join(resultsAbsDir, fmt.Sprintf("%s.png", pattern.patternName))); err != nil {
+			filepath.Join(resultsAbsDir, fmt.Sprintf("%s.svg", pattern.patternName))); err != nil {
 			return fmt.Errorf("generate BarCharts for [%s] failed! err:%v",
 				pattern.patternName, err)
 		}
@@ -374,7 +398,7 @@ func (t *patternsTable) createBarChart(table patternsTable, description, dirPath
 	return nil
 }
 
-func InitBarCharts(dirWithCSV, descriptionForGraphs string) error {
+func initBarCharts(dirWithCSV, descriptionForGraphs string) error {
 	var testResults = make(AllRes, 0)
 
 	ex, err := os.Executable()
@@ -414,9 +438,195 @@ func InitBarCharts(dirWithCSV, descriptionForGraphs string) error {
 	return nil
 }
 
+func (t *LogFile) parsingLogfile(filePath string) error {
+	logFile, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("could not open log file %s err:%w", filePath, err)
+	}
+	defer logFile.Close()
+
+	reader, err := csv.NewReader(logFile).ReadAll()
+	if err != nil {
+		return fmt.Errorf("could not read log file %s err:%w", filePath, err)
+	}
+
+	for _, line := range reader {
+		// example line [119995  3481600  0  0]
+		sTime, _ := strconv.Atoi(strings.TrimSpace(line[0]))
+		sValue, _ := strconv.Atoi(strings.TrimSpace(line[1]))
+		sOpType, _ := strconv.Atoi(strings.TrimSpace(line[2]))
+		logLine := LogLine{
+			time:   sTime,
+			value:  sValue,
+			opType: sOpType,
+		}
+		*t = append(*t, &logLine)
+	}
+
+	return nil
+}
+
+// getPoints - Get values for the x-axis
+func getPoints(data LogFile, logType int) plotter.XYs {
+	pts := make(plotter.XYs, len(data))
+	for i, point := range data {
+		pts[i].X = float64(i)
+		if logType == 1 {
+			pts[i].Y = mbps(point.value)
+		} else {
+			pts[i].Y = float64(point.value)
+		}
+	}
+	return pts
+}
+
+//getInfoAboutLogFile   return: fileType (1-bw,2-iops,3-lat), Y-name, test Name, error
+func getInfoAboutLogFile(fileName string) (int, string, string, error) {
+	testName := strings.Split(fileName, ".")
+	var err error
+
+	bwLog := strings.Contains(fileName, "bw")
+	if (bwLog) {
+		return 1, "MB/s", testName[0], nil
+	}
+
+	iopsLog := strings.Contains(fileName, "iops")
+	if (iopsLog) {
+		return 2, "IOPS", testName[0], nil
+	}
+
+	latLog := strings.Contains(fileName, "lat")
+	if (latLog) {
+		return 3, "msec", testName[0], nil
+	}
+
+	return 0, "", "", err
+}
+
+// addLinePoints adds Line and Scatter plotters to a
+// plot.  The variadic arguments must be either strings
+// or plotter.XYers.  Each plotter.XYer is added to
+// the plot using the next color, dashes, and glyph
+// shape via the Color, Dashes, and Shape functions.
+// If a plotter.XYer is immediately preceeded by
+// a string then a legend entry is added to the plot
+// using the string as the name.
+//
+// If an error occurs then none of the plotters are added
+// to the plot, and the error is returned.
+func addLinePoints(plt *plot.Plot, vs ...interface{}) error {
+	var ps []plot.Plotter
+	type item struct {
+		name  string
+		value [2]plot.Thumbnailer
+	}
+	var items []item
+	name := ""
+	var i int
+	for _, v := range vs {
+		switch t := v.(type) {
+		case string:
+			name = t
+
+		case plotter.XYer:
+			l, s, err := plotter.NewLinePoints(t)
+			if err != nil {
+				return err
+			}
+			l.Color = plotutil.Color(2)
+			l.Dashes = plotutil.Dashes(0)
+			l.StepStyle = plotter.NoStep
+			s.Color = plotutil.Color(10)
+			s.Shape = nil
+			i++
+			ps = append(ps, l, s)
+			if name != "" {
+				items = append(items, item{name: name, value: [2]plot.Thumbnailer{l, s}})
+				name = ""
+			}
+
+		default:
+			return fmt.Errorf("plotutil: AddLinePoints handles strings and plotter.XYers, got %T", t)
+		}
+	}
+	plt.Add(ps...)
+	for _, item := range items {
+		v := item.value[:]
+		plt.Legend.Add(item.name, v[0], v[1])
+	}
+	return nil
+}
+
+func countingSizeLogCanvas(countX int) (font.Length, font.Length) {
+	if countX > 30000 {
+		return 400 * vg.Inch, 10 * vg.Inch
+	} else if countX > 20000 {
+		return 250 * vg.Inch, 7 * vg.Inch
+	} else if countX > 10000 {
+		return 150 * vg.Inch, 7 * vg.Inch
+	} else if countX > 5000 {
+		return 100 * vg.Inch, 7 * vg.Inch
+	} else if countX > 1000 {
+		return 70 * vg.Inch, 7 * vg.Inch
+	} else if countX > 500 {
+		return 35 * vg.Inch, 7 * vg.Inch
+	} else if countX > 100 {
+		return 20 * vg.Inch, 7 * vg.Inch
+	}
+	return 10 * vg.Inch, 7 * vg.Inch
+}
+
+func (t *LogFile) createLogChart(data LogFile, logType int, yName, testName, discription, DirResPath string) error {
+	p, _ := plotCreate(testName, yName, "description", float64(len(data)))
+	err := addLinePoints(p, yName, getPoints(data, logType))
+	if err != nil {
+		return fmt.Errorf("error with get values for the Y-axis %w", err)
+	}
+
+	width, height := countingSizeLogCanvas(len(data))
+	if err := p.Save(width, height, filepath.Join(DirResPath, fmt.Sprintf("%s.svg", testName)) ); err != nil {
+		return fmt.Errorf("error with save charts %w", err)
+	}
+	return nil
+}
+
+func initLogCharts(dirWithLogs, discription string) error {
+	ex, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not get executable path: %w", err)
+	}
+
+	mainResultsAbsDir := filepath.Join(filepath.Dir(ex), "logCharts")
+	err = os.Mkdir(mainResultsAbsDir, 0755)
+	if err != nil {
+		return fmt.Errorf("could not create local dir for result: %w", err)
+	}
+
+	fileWithResults, err := readDirWithResults(dirWithLogs)
+	if err != nil {
+		return fmt.Errorf("could not read dir with CSV files: %w", err)
+	}
+
+	for _, fileName := range fileWithResults {
+		if !fileName.IsDir() {
+ 			var logData = make(LogFile, 0)
+			fType, yName, testName, _  := getInfoAboutLogFile(fileName.Name())
+			logData.parsingLogfile(filepath.Join(dirWithLogs, fileName.Name()))
+			logData.createLogChart(logData, fType, yName, testName, discription, mainResultsAbsDir)
+		}
+	}
+	return nil
+}
+
 func (x *PlotCommand) Execute(args []string) error {
-	if err := InitBarCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
-		return fmt.Errorf("error with create bar charts: %w", err)
+	if plotCmd.CBarCharts {
+		if err := initBarCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
+			return fmt.Errorf("error with create bar charts: %w", err)
+		}
+	} else if plotCmd.CLogCharts {
+		if err := initLogCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
+			return fmt.Errorf("error with create log charts: %w", err)
+		}
 	}
 	return nil
 }

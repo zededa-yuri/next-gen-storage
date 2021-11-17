@@ -17,7 +17,7 @@ runtime=%s
 time_based=1
 group_reporting=1
 filename=%s
-log_avg_msec=20
+log_avg_msec=250
 per_job_logs=0
 
 `
@@ -32,7 +32,7 @@ verify_fatal=1
 time_based=1
 group_reporting=1
 filename=%s
-log_avg_msec=20
+log_avg_msec=250
 per_job_logs=0
 
 `
