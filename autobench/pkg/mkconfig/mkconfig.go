@@ -11,7 +11,7 @@ import (
 
 const globalTpl = `[global]
 ioengine=libaio
-size=1G
+size=%dG
 direct=1
 runtime=%s
 time_based=1
@@ -24,7 +24,7 @@ per_job_logs=0
 
 const globalTplcheckSumm = `[global]
 ioengine=libaio
-size=1G
+size=%dG
 direct=1
 runtime=%s
 verify=%s
@@ -155,6 +155,7 @@ type FioOptions struct {
 	Jobs      	JobsType
 	Iodepth     DepthType
 	CheckSumm	string
+	SizeGb      int
 }
 
 func CountTests(cfg FioOptions) int {
@@ -203,6 +204,11 @@ func GenerateFIOConfig(
 	if (runtime == 0) {
 		runtime = 60 * time.Second
 	}
+
+	if (cfg.SizeGb == 0) {
+		cfg.SizeGb = 1
+	}
+
 	var sTime = fmt.Sprintf("%d", int64(runtime.Round(time.Second).Seconds()))
 
 	ftPath := filepath.Join("/home/", sshUser, "/fio.test.file")
@@ -217,9 +223,9 @@ func GenerateFIOConfig(
 	defer fd.Close()
 
 	if cfg.CheckSumm != "" {
-		fmt.Fprintf(fd, globalTplcheckSumm, sTime, cfg.CheckSumm, ftPath)
+		fmt.Fprintf(fd, globalTplcheckSumm, cfg.SizeGb, sTime, cfg.CheckSumm, ftPath)
 	} else {
-		fmt.Fprintf(fd, globalTpl, sTime, ftPath)
+		fmt.Fprintf(fd, globalTpl, cfg.SizeGb, sTime, ftPath)
 	}
 
 	for _, rw := range cfg.Operations {
