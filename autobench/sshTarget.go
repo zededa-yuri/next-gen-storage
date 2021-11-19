@@ -95,7 +95,7 @@ func (x *SSHCommand) Execute(args []string) error {
 	defer sshClient.Close()
 
 	fmt.Println("FIO Tests start...")
-	err = fiotests.RunFIOTest(sshClient, sshCmd.SSHUser, opts.LocalFolderResults, opts.LocalDirResults, opts.TargetFIODevice, FioOptions, 60*time.Second);
+	err = fiotests.RunFIOTest(sshClient, sshCmd.SSHUser, opts.LocalFolderResults, opts.LocalDirResults, opts.TargetFIODevice, FioOptions, time.Duration(opts.TimeOneTest) * time.Second);
 	if err != nil {
 		return fmt.Errorf("FIO tests failed error: %v", err)
 	}

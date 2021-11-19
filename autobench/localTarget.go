@@ -28,7 +28,7 @@ func (x LocalCommand) Execute(args []string) error {
 		return fmt.Errorf("error get fio params: %w", err)
 	}
 
-	err = fiotests.RunFIOTestLocal(localCmd.User, opts.LocalFolderResults, opts.LocalDirResults, opts.TargetFIODevice, FioOptions, 60*time.Second)
+	err = fiotests.RunFIOTestLocal(localCmd.User, opts.LocalFolderResults, opts.LocalDirResults, opts.TargetFIODevice, FioOptions, time.Duration(opts.TimeOneTest) * time.Second)
 	if err != nil {
 		return fmt.Errorf("fio tests failed error: %v", err)
 	}

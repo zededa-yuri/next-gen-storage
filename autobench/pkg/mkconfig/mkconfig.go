@@ -45,6 +45,7 @@ iodepth=%d
 numjobs=%d
 write_bw_log=%s
 write_iops_log=%s
+write_lat_log=%s
 stonewall
 `
 
@@ -228,7 +229,7 @@ func GenerateFIOConfig(
 				for _, job := range cfg.Jobs {
 					var section = fmt.Sprintf("%s-%s-%d", rw, bs, count)
 					var logResName = filepath.Join(remoteDirResults, section)
-					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job, logResName, logResName)
+					fmt.Fprintf(fd, sectionTpl, section, rw, bs, depth, job, logResName, logResName, logResName)
 					count++
 				}
 			}
