@@ -207,13 +207,13 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 
 		if qemuCmd.CZfs || qemuCmd.CLvm {
 			if qemuCmd.CZfs {
-				if err := vhost.CreateZvol("fiotest", vm.shareVolName); err != nil {
+				if err := vhost.CreateZvol("fiotest", vm.shareVolName, opts.SizeDiskGb + 2); err != nil {
 					return fmt.Errorf("create zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}
 				vm.wwnAdress, err = vhost.SetupVhost(vm.zfsDevice, vm.iblockId)
 			} else {
-				if err := vhost.LVcreate(vm.shareVolName, "fiotest"); err != nil {
+				if err := vhost.LVcreate(vm.shareVolName, "fiotest", opts.SizeDiskGb + 2); err != nil {
 					return fmt.Errorf("create lvmVol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}

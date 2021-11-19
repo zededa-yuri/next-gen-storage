@@ -9,7 +9,8 @@ import (
 )
 
 type Options struct {
-	TimeOneTest        int `short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
+	TimeOneTest        int 	  `short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
+	SizeDiskGb		   int    `short:"s" long:"size" description:"The total size of file I/O for each thread of this job in Gb" required:"true"`
 	OpType             string `short:"o" long:"optype" description:"Operation types I/O for fio config" default:"read,write"`
 	BlockSize          string `short:"b" long:"bs" description:"Block size for fio config"  default:"4k,64k,1m"`
 	Iodepth            string `short:"d" long:"iodepth" description:"Iodepth for fio config" default:"8,16,32"`
@@ -51,6 +52,8 @@ func InitFioOptions() error {
 	if err := FioOptions.Iodepth.Set(opts.Iodepth); err != nil {
 		return fmt.Errorf("fio tests failed: %v", err)
 	}
+
+	FioOptions.SizeGb = opts.SizeDiskGb
 
 	if opts.CheckSumm != "" {
 		var valid = []string{"md5", "crc64", "crc32c", "crc32c-intel", "crc32", "crc16", "crc7", "xxhash", "sha512", "sha256", "sha1", "meta"}

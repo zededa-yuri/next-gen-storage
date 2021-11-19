@@ -34,10 +34,10 @@ func VGcreate(diskPath, vgName string) error {
 }
 
 // LVcreate - Create a logical volume on the volume group
-func LVcreate(lvName, vgName string) error {
+func LVcreate(lvName, vgName string, sizeDisk int) error {
 	// lvcreate -L 50G --name testlv testvg
 	output, err := exec.Command("lvcreate", "-L",
-								"50G", "--name",
+								fmt.Sprintf("%dG", sizeDisk), "--name",
 								lvName, vgName).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Failed to LVcreate: err:[%w] output:[%s]", err, output)
@@ -145,9 +145,9 @@ func DestroyZpool(zpoolName string) error {
 	return nil
 }
 
-func CreateZvol(zpoolName, zvolName string) error {
+func CreateZvol(zpoolName, zvolName string, sizeDisk int) error {
 	//zfs create -V 1G tank/disk1
-	output, err := exec.Command("zfs", "create", "-V", "50G",
+	output, err := exec.Command("zfs", "create", "-V", fmt.Sprintf("%dG", sizeDisk),
 	 							fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("Failed to create zvol: log:%s err:%w", output, err)
