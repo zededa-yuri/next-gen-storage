@@ -5,13 +5,67 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/fioconv"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/mkconfig"
 	"github.com/zededa-yuri/nextgen-storage/autobench/pkg/sshwork"
 	"golang.org/x/crypto/ssh"
+	"github.com/prometheus/procfs"
 )
+
+// GetMemoryDump - gets memory usage data once per second for each group of tests.
+// Support only on Linux OS
+func GetMemoryDump(timeSecondsForOneTest int, dirForResults string, countTests int) error {
+	if runtime.GOOS == "linux" {
+		mainResultsAbsDir := filepath.Join(dirForResults, "MemoryDumps")
+		err := os.Mkdir(mainResultsAbsDir, 0755)
+		if err != nil {
+			return fmt.Errorf("could not create local dir for memory dums: %w", err)
+		}
+
+		fs, err := procfs.NewFS("/proc")
+		if err != nil {
+			return fmt.Errorf("could not get procfs mounted point. err: %w", err)
+		}
+
+		for i := 0; i < countTests; i++ {
+			resPathFile := filepath.Join(mainResultsAbsDir, fmt.Sprintf("MemDumpTestID-%d.csv", i))
+			file, err := os.Create(resPathFile)
+			if err != nil{
+				return fmt.Errorf("failed to create file with memory dump information: %w", err)
+			}
+			defer file.Close()
+
+			_, err = file.WriteString("Seconds,MemTotal,MemFree,MemAvailable,Buffers,Cached,SwapTotal,SwapFree,SwapCached,Dirty,Writeback,Slab\n")
+			if err != nil {
+				return fmt.Errorf("failed write title to file CSV: %w", err)
+			}
+
+			for sec := 0; sec < timeSecondsForOneTest; sec++ {
+				rMemInfo, err := fs.Meminfo()
+				if err != nil {
+					return fmt.Errorf("could not get info from /proc/meminfo err: %w", err)
+				}
+				// All data about memory count in kB
+				data := fmt.Sprintf("%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n", sec,
+							*rMemInfo.MemTotal, *rMemInfo.MemFree,
+							*rMemInfo.MemAvailable, *rMemInfo.Buffers,
+							*rMemInfo.Cached, *rMemInfo.SwapTotal,
+							*rMemInfo.SwapFree, *rMemInfo.SwapCached,
+							*rMemInfo.Dirty, *rMemInfo.Writeback,
+							*rMemInfo.Slab)
+				_, err = file.WriteString(data)
+				if err != nil {
+					return fmt.Errorf("failed write data to file CSV: %w", err)
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}
+	return nil
+}
 
 func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
 	curentDate := fmt.Sprintf(time.Now().Format("2006-01-02-15:04:05"))
@@ -88,6 +142,9 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 50 * time.Second
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
+
+	//Run get memory dumps
+	go GetMemoryDump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
 
 	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
 	fioRunCmd := fmt.Sprintf(
@@ -229,6 +286,9 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 	var countTests = mkconfig.CountTests(fioOptions)
 	const bufferTime = 2 * time.Minute
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
+
+	//Run get memory dumps
+	go GetMemoryDump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
 
 	go func() {
 		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"),
