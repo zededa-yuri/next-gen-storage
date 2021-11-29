@@ -18,7 +18,6 @@ time_based=1
 group_reporting=1
 filename=%s
 log_avg_msec=250
-per_job_logs=0
 
 `
 
@@ -33,7 +32,6 @@ time_based=1
 group_reporting=1
 filename=%s
 log_avg_msec=250
-per_job_logs=0
 
 `
 
