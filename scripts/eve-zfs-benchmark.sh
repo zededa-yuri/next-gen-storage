@@ -208,7 +208,7 @@ EOF
 
 one_test() {
     results_dir="${1}"
-    FIO_data_size="${2}"
+    template="${2}"
     FIO_rw="${3}"
     FIO_bs="${4}"
     FIO_nr_jobs="${5}"
@@ -231,7 +231,6 @@ one_test() {
 
     echo "Starting job ${out_dir}"
     export FIO_OUT_PATH
-    export FIO_data_size
     export FIO_bs
     export FIO_rw
     export FIO_nr_jobs
@@ -245,7 +244,7 @@ one_test() {
     fi
 
     # shellcheck disable=SC2029
-    local fio_command="fio fio-template.job \
+    local fio_command="fio ${template} \
 --output-format=json+,normal \
 --output=${FIO_OUT_PATH}/result.json \
 --group_reporting --eta-newline=1 \
@@ -336,15 +335,15 @@ main() {
 
     mkdir -p "${results_dir}"
 
-    # format_disk || exit 1
-    # # results_dir data_size rw bs jobs_nr iodepth
-    # one_test "${results_dir}" 160G write 256k 1 1 || exit 1
+    format_disk || exit 1
+    # results_dir data_size rw bs jobs_nr iodepth
+    one_test "${results_dir}" fio-place-data.job write 256k 1 1 || exit 1
 
 
-    for load in randwrite; do
-	for nr_jobs in 2 ; do
-	    for io_depth in 4; do
-		one_test "${results_dir}" 65G "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
+    for load in read randread write randwrite trimwrite; do
+	for nr_jobs in 1 2; do
+	    for io_depth in 1 2 4 ; do
+		one_test "${results_dir}" fio-template.job "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
 	    done
 	done
     done
@@ -352,7 +351,7 @@ main() {
 
 #get_zfs_params_json
 setup_ssh_config
-main zfs_untuned_p3
+main zfs_untuned_p4
 # setup_ssh_config
 # get_sample_with_fragmentation
 # write_sys_stat_json_head test_sys.json || exit 1
