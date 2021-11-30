@@ -175,6 +175,10 @@ Host guest
 EOF
 
     cp ssh-keys/* ~/.ssh/
+
+    cat >> /root/.ssh/authorized_keys << EOF
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCoEmuzL43ZkQ2s4KBjJj1uanzwnmPAHhoI3x3BvGbRIc5vHnl3ZUu7QNtiu5uRnjN9cjt1ZpQfMjpSLdTLyMk6Q7CLSTZ69PtDjp74+CxkMnsMQj6BPFJdVrQtJayynyqOJsF9sbiH3cpV7fgBGOrLjonVtQYqk6I7Ia//G02oH9f4g9gV8Z8xU6BI6qgEZ3GVvN0Od6vtn+M7yVS8gwqry6edGpwTqf9DizNXKhIVHySbKxmrWOVBD2xa66pm8vwvPccTMYPY6WTt57Q/bGTuSaewSOdDfvOJB1YgVR+cyvhWsXJI1s27HDeYXrippN4JQhnC+7CgLN87CAvhE8mdA6mwngmCUOcuguX3KkY9INUJmHYy/j/zxO+Xh0NWThJP0ddtgMq/ewO2f2nHEuBd87UmuPwhYPlwaX3gLWzpqNFurw9IASDRVj5E59RuO06GtLds0rw6qB76lFymoVArb6oyNoSQsJ8crbPgl4qhgjqwiNouZqCQ051SQoc/DgM= yuri@Yuris-MacBook-Pro-16.local
+EOF
 }
 
 
@@ -231,21 +235,22 @@ one_test() {
 --group_reporting --eta-newline=1 \
 > ${FIO_OUT_PATH}/fio-log.txt
 "
-    scp -r guest:"${FIO_OUT_PATH}" "${out_dir}"
-    ssh guest "rm -rf ${out_dir}"
+    scp -r guest:"${FIO_OUT_PATH}" "${out_dir}" || echo "failed downloading results"; exit 1
+    ssh guest "rm -rf ${FIO_OUT_PATH}"
     echo "Done"
 }
 
 zfs_trim() {
     trim_done=0
-    for i in $(seq 1 10); do
+    echo "attempting to trim the pool.."
+    while 1; do
 	if zpool trim persist -w; then
 	    echo "Pool trimmed successfuly"
 	    trim_done=1
 	    break;
 	fi
-	echo "zpool trim failed, repeating after 1 sec"
-	sleep 1;
+	echo "zpool trim failed, repeating after 30 sec"
+	sleep 30;
     done
 
     if [ "${trim_done}" = "0" ]; then
@@ -273,9 +278,7 @@ main() {
     target_device=sdb
 
     if ! command -v zpool; then
-	echo "Please run"
-	echo "    apk update && apk add zfs"
-	exit 1
+	apk update && apk add zfs rsync jq
     fi
 
     if [ -d "${results_dir}" ]; then
@@ -287,15 +290,16 @@ main() {
 	esac
     fi
 
-    format_disk || exit 1
+    # format_disk || exit 1
 
     mkdir -p "${results_dir}"
     # results_dir rw bs jobs_nr iodepth
-    one_test "${results_dir}" write 256k 1 1
+    # one_test "${results_dir}" write 256k 1 1
 
-    for load in write read randwrite randwrite trimwrite; do
+
+    for load in randwrite randread trimwrite; do
 	for nr_jobs in 2 4; do
-	    for io_depth in 1 4 16; do
+	    for io_depth in 1 4; do
 		one_test "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}"
 	    done
 	done
