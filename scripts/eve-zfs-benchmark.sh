@@ -275,8 +275,6 @@ one_test() {
 }
 
 zfs_trim() {
-    return
-
     trim_done=0
     echo "attempting to trim the pool.."
     while true; do
@@ -296,7 +294,6 @@ zfs_trim() {
 }
 
 format_disk() {
-    return 0
     # Umount can legitemaly fail, if it wasn't mount on the first
     # place
     echo "Cleaning target disk.."
@@ -337,17 +334,17 @@ main() {
 
     trap "ssh guest 'pkill fio'" SIGINT
 
-    format_disk || exit 1
-
     mkdir -p "${results_dir}"
-    # results_dir data_size rw bs jobs_nr iodepth
-    one_test "${results_dir}" 160G write 256k 1 1 || exit 1
+
+    # format_disk || exit 1
+    # # results_dir data_size rw bs jobs_nr iodepth
+    # one_test "${results_dir}" 160G write 256k 1 1 || exit 1
 
 
     for load in randwrite; do
 	for nr_jobs in 2 ; do
 	    for io_depth in 4; do
-		one_test 62G "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
+		one_test "${results_dir}" 65G "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
 	    done
 	done
     done
@@ -355,7 +352,7 @@ main() {
 
 #get_zfs_params_json
 setup_ssh_config
-main zfs_untuned_p2
+main zfs_untuned_p3
 # setup_ssh_config
 # get_sample_with_fragmentation
 # write_sys_stat_json_head test_sys.json || exit 1
