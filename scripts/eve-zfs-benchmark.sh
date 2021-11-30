@@ -2,6 +2,7 @@
 
 
 get_dm_tx_json_body() {
+    # shellcheck disable=SC2016
     awk_script='
 {
     if (NR==1) {
@@ -27,7 +28,7 @@ END {
 zfs_get_one_param_json() {
     param="$1"
 
-    val="$(cat /sys/module/zfs/parameters/${param})" || return 1
+    val="$(cat /sys/module/zfs/parameters/"${param}")" || return 1
     printf "\"%s\": %d" "${param}" "${val}"
 }
 get_zfs_params_json() {
@@ -76,17 +77,19 @@ write_dm_tx_json_head() {
 
 write_dm_tx_json_tail() {
     out_file="$1"
-    echo ",\"after_test\":" >> "${out_file}"
-    get_dm_tx_json_body >> "${out_file}"
-    echo -e "}\n" >> "${out_file}"
+    {
+	echo ",\"after_test\":"
+	get_dm_tx_json_body
+	echo -e "}\n"
+    } >> "${out_file}"
 }
 
 get_sample_with_fragmentation() {
     sample="$(get_sample)" || return 1
     frag="$(zpool get -Hp fragmentation persist)" || return 1
-    frag="$(awk '{print $3}' <<< ${frag})" || return 1
+    frag="$(awk '{print $3}' <<< "${frag}")" || return 1
 
-    json="$(jq --arg frag ${frag} '. | .fragmentation=$frag' <<< ${sample})" || return 1
+    json="$(jq --arg frag "${frag}" '. | .fragmentation=$frag' <<< "${sample}")" || return 1
 
     echo "${json}"
 }
@@ -97,9 +100,9 @@ write_sys_stat_json_head() {
     json="$(get_zfs_params_json)" || return 1
     sample="$(get_sample_with_fragmentation)" || return 1
 
-    json="$(jq '{zfs:.}' <<< ${json})" || return 1
+    json="$(jq '{zfs:.}' <<< "${json}")" || return 1
 
-    json="$(jq --argjson before "${sample}" '. | .before_test=$before' <<< ${json})" || return 1
+    json="$(jq --argjson before "${sample}" '. | .before_test=$before' <<< "${json}")" || return 1
 
     cat <<<"${json}" > "${out_file}"
 
@@ -108,10 +111,10 @@ write_sys_stat_json_head() {
 
 write_sys_stat_json_tail() {
     out_file="$1"
-    json="$(<${out_file})" || return 1
+    json="$(<"${out_file}")" || return 1
     sample="$(get_sample_with_fragmentation)" || return 1
 
-    json="$(jq --argjson after "${sample}" '. | .after_test=$after' <<< ${json})" || return 1
+    json="$(jq --argjson after "${sample}" '. | .after_test=$after' <<< "${json}")" || return 1
     cat <<<"${json}" > "${out_file}"
 }
 
@@ -119,16 +122,16 @@ get_sample()
 {
     # Memory
     meminfo="$(cat /proc/meminfo)"
-    memTotal=$(echo "${meminfo}" | egrep '^MemTotal:' | awk '{print $2}')
-    memFree=$(echo "${meminfo}" | egrep '^MemFree:' | awk '{print $2}')
-    memCached=$(echo "${meminfo}" | egrep '^Cached:' | awk '{print $2}')
+    memTotal=$(echo "${meminfo}" | grep -E '^MemTotal:' | awk '{print $2}')
+    memFree=$(echo "${meminfo}" | grep -E '^MemFree:' | awk '{print $2}')
+    memCached=$(echo "${meminfo}" | grep -E '^Cached:' | awk '{print $2}')
 
-    memUsed=$(($memTotal - $memFree))
-    swapTotal=$(echo "${meminfo}" | egrep '^SwapTotal:' | awk '{print $2}')
-    swapFree=$(echo "${meminfo}" | egrep '^SwapFree:' | awk '{print $2}')
+    memUsed=$((memTotal - memFree))
+    swapTotal=$(echo "${meminfo}" | grep -E '^SwapTotal:' | awk '{print $2}')
+    swapFree=$(echo "${meminfo}" | grep -E '^SwapFree:' | awk '{print $2}')
 
 
-    read CPUusage CPUsystem CPUidle << EOF
+    read -r CPUusage CPUsystem CPUidle << EOF
 $(grep 'cpu ' /proc/stat | awk '{print $2 " " $4 " " $5}')
 EOF
 
@@ -161,8 +164,9 @@ monitor() {
 
     echo "Starting monitor.."
     #trap "echo ] >> ${output}" SIGINT
-    trap "echo terminating monitor.. && echo ] >> ${output} && return 0" TERM
-    trap return KILL
+
+    # shellcheck disable=SC2064
+    trap "echo terminating monitor.. && echo ] >> ${output} && return 0" SIGTERM
 
     rm -f "${output}"
     if ! touch "${output}"; then
@@ -173,9 +177,10 @@ monitor() {
     echo "[" >> "${output}"
     get_sample  >> "${output}"
     while true; do
+	echo monitor
 	echo ","  >> "${output}"
 	get_sample >> "${output}"
-	sleep 1
+	sleep 5
     done
 }
 
@@ -206,7 +211,7 @@ one_test_finish() {
     out_dir="$1"
     monitor_pid="$2"
 
-    echo "exitting.."
+    echo "cleaning up.."
     write_dm_tx_json_tail "${out_dir}"/zfs_dm_stats.json;
     write_sys_stat_json_tail "${out_dir}"/sys_stats.json;
     kill "${monitor_pid}"
@@ -235,7 +240,7 @@ one_test() {
     monitor_pid=$!
     sleep 2
 
-    trap "one_test_finish ${out_dir} ${monitor_pid}"  EXIT
+    # trap "one_test_finish ${out_dir} ${monitor_pid}" && return 1 SIGINT
 
     echo "Starting job ${out_dir}"
     export FIO_OUT_PATH
@@ -245,27 +250,33 @@ one_test() {
     export FIO_iodepth
 
     sleep 1
+    # shellcheck disable=SC2029
     if ! ssh guest "rm -rf ${FIO_OUT_PATH} && mkdir -p ${FIO_OUT_PATH}"; then
 	echo "failed creating results dir on the guest"
 	return 1
     fi
 
+    # shellcheck disable=SC2029
     ssh guest "fio fio-template.job \
 --output-format=json+,normal \
 --output=${FIO_OUT_PATH}/result.json \
 --group_reporting --eta-newline=1 \
 > ${FIO_OUT_PATH}/fio-log.txt
 "
+    # shellcheck disable=SC2029
     if ! scp -r guest:"${FIO_OUT_PATH}" "${out_dir}"; then
 	echo "failed downloading results"
 	return 1
     fi
 
+    # shellcheck disable=SC2029
     ssh guest "rm -rf ${FIO_OUT_PATH}"
     echo "Done"
 }
 
 zfs_trim() {
+    return
+
     trim_done=0
     echo "attempting to trim the pool.."
     while true; do
@@ -285,12 +296,17 @@ zfs_trim() {
 }
 
 format_disk() {
+    return 0
     # Umount can legitemaly fail, if it wasn't mount on the first
     # place
     echo "Cleaning target disk.."
+    # shellcheck disable=SC2029
     ssh guest "sudo umount /dev/${target_device}"
+    # shellcheck disable=SC2029
     ssh guest "sudo blkdiscard /dev/${target_device}" || return 1
+    # shellcheck disable=SC2029
     ssh guest "sudo mkfs.ext4 /dev/${target_device}" || return 1
+    # shellcheck disable=SC2029
     ssh guest "sudo mount /dev/${target_device} /mnt" || return 1
     ssh guest "sudo chown pocuser:pocuser /mnt" || return 1
 
@@ -308,9 +324,10 @@ main() {
     fi
 
     if [ -d "${results_dir}" ]; then
-	read -p "${results_dir} exists, remove? Y/n" yn
+	# shellcheck disable=SC2029
+	read -r -p "${results_dir} exists, remove? Y/n" yn
 	case $yn in
-            [Yy]* ) echo yes; ;;
+            [Yy]* ) echo yes; rm -rf "${results_dir}" ;;
             [Nn]* ) echo no; exit 1;;
             * ) echo "Please answer yes or no."; exit ;;
 	esac
@@ -322,13 +339,13 @@ main() {
 
     mkdir -p "${results_dir}"
     # results_dir rw bs jobs_nr iodepth
-    one_test "${results_dir}" write 256k 1 1
+    one_test "${results_dir}" write 256k 1 1 || exit 1
 
 
-    for load in randwrite randread trimwrite; do
+    for load in randwrite randread; do
 	for nr_jobs in 2 4; do
 	    for io_depth in 1 4; do
-		one_test "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}"
+		one_test "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
 	    done
 	done
     done
