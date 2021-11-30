@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/bin/bash
+
 
 get_dm_tx_json_body() {
     awk_script='
@@ -26,7 +27,8 @@ END {
 zfs_get_one_param_json() {
     param="$1"
 
-    printf "\"%s\": %d" "${param}" "$(cat /sys/module/zfs/parameters/${param})"
+    val="$(cat /sys/module/zfs/parameters/${param})" || return 1
+    printf "\"%s\": %d" "${param}" "${val}"
 }
 get_zfs_params_json() {
     echo "{"
@@ -55,13 +57,13 @@ zfs_vdev_async_write_max_active \
 
     new_params="zfs_smoothing_scale zfs_write_smoothing"
     if [ -f /sys/module/zfs/parameters/zfs_smoothing_scale ]; then
-	params="${params}" "${new_params}"
+	params="${params} ${new_params}"
     fi
 
     printf "\"version\": \"%s\"" "$(cat /sys/module/zfs/version)"
     for opt in ${params}; do
 	echo ","
-	zfs_get_one_param_json "${opt}"
+	zfs_get_one_param_json "${opt}" || return 1
     done
     echo -e "\n}"
 }
@@ -79,20 +81,38 @@ write_dm_tx_json_tail() {
     echo -e "}\n" >> "${out_file}"
 }
 
+get_sample_with_fragmentation() {
+    sample="$(get_sample)" || return 1
+    frag="$(zpool get -Hp fragmentation persist)" || return 1
+    frag="$(awk '{print $3}' <<< ${frag})" || return 1
+
+    json="$(jq --arg frag ${frag} '. | .fragmentation=$frag' <<< ${sample})" || return 1
+
+    echo "${json}"
+}
+
 write_sys_stat_json_head() {
     out_file="$1"
-    echo -e "{ \"zfs\":" > "${out_file}"
-    get_zfs_params_json >> "${out_file}"
 
-    echo ",\"before_test\":" >> "${out_file}"
-    get_sample >> "${out_file}"
+    json="$(get_zfs_params_json)" || return 1
+    sample="$(get_sample_with_fragmentation)" || return 1
+
+    json="$(jq '{zfs:.}' <<< ${json})" || return 1
+
+    json="$(jq --argjson before "${sample}" '. | .before_test=$before' <<< ${json})" || return 1
+
+    cat <<<"${json}" > "${out_file}"
+
+    # get_sample >> "${out_file}"
 }
 
 write_sys_stat_json_tail() {
     out_file="$1"
-    echo ",\"after_test\":" >> "${out_file}"
-    get_sample >> "${out_file}"
-    echo -e "}\n" >> "${out_file}"
+    json="$(<${out_file})" || return 1
+    sample="$(get_sample_with_fragmentation)" || return 1
+
+    json="$(jq --argjson after "${sample}" '. | .after_test=$after' <<< ${json})" || return 1
+    cat <<<"${json}" > "${out_file}"
 }
 
 get_sample()
@@ -142,7 +162,7 @@ monitor() {
     echo "Starting monitor.."
     #trap "echo ] >> ${output}" SIGINT
     trap "echo terminating monitor.. && echo ] >> ${output} && return 0" TERM
-    trap exit 1 KILL
+    trap return KILL
 
     rm -f "${output}"
     if ! touch "${output}"; then
@@ -204,7 +224,7 @@ one_test() {
     out_dir="${results_dir}/${test_name}"
     FIO_OUT_PATH="fio-output/${out_dir}-guest"
 
-    zfs_trim || exit 1
+    zfs_trim || return 1
 
     rm -rf "${out_dir}"
     mkdir "${out_dir}"
@@ -214,8 +234,6 @@ one_test() {
     monitor "${out_dir}"/sys_stats_log.json&
     monitor_pid=$!
     sleep 2
-
-    set -e
 
     trap "one_test_finish ${out_dir} ${monitor_pid}"  EXIT
 
@@ -227,7 +245,10 @@ one_test() {
     export FIO_iodepth
 
     sleep 1
-    ssh guest "rm -rf ${FIO_OUT_PATH} && mkdir -p ${FIO_OUT_PATH}" || exit 1
+    if ! ssh guest "rm -rf ${FIO_OUT_PATH} && mkdir -p ${FIO_OUT_PATH}"; then
+	echo "failed creating results dir on the guest"
+	return 1
+    fi
 
     ssh guest "fio fio-template.job \
 --output-format=json+,normal \
@@ -235,7 +256,11 @@ one_test() {
 --group_reporting --eta-newline=1 \
 > ${FIO_OUT_PATH}/fio-log.txt
 "
-    scp -r guest:"${FIO_OUT_PATH}" "${out_dir}" || echo "failed downloading results"; exit 1
+    if ! scp -r guest:"${FIO_OUT_PATH}" "${out_dir}"; then
+	echo "failed downloading results"
+	return 1
+    fi
+
     ssh guest "rm -rf ${FIO_OUT_PATH}"
     echo "Done"
 }
@@ -243,7 +268,7 @@ one_test() {
 zfs_trim() {
     trim_done=0
     echo "attempting to trim the pool.."
-    while 1; do
+    while true; do
 	if zpool trim persist -w; then
 	    echo "Pool trimmed successfuly"
 	    trim_done=1
@@ -264,10 +289,10 @@ format_disk() {
     # place
     echo "Cleaning target disk.."
     ssh guest "sudo umount /dev/${target_device}"
-    ssh guest "sudo blkdiscard /dev/${target_device}" || exit 1
-    ssh guest "sudo mkfs.ext4 /dev/${target_device}" || exit 1
-    ssh guest "sudo mount /dev/${target_device} /mnt" || exit 1
-    ssh guest "sudo chown pocuser:pocuser /mnt" || exit 1
+    ssh guest "sudo blkdiscard /dev/${target_device}" || return 1
+    ssh guest "sudo mkfs.ext4 /dev/${target_device}" || return 1
+    ssh guest "sudo mount /dev/${target_device} /mnt" || return 1
+    ssh guest "sudo chown pocuser:pocuser /mnt" || return 1
 
     # Just in case to let zfs realized that blocks have been trimmed
     sync && sleep 2
@@ -278,23 +303,26 @@ main() {
     target_device=sdb
 
     if ! command -v zpool; then
+	echo "installing dependencies"
 	apk update && apk add zfs rsync jq
     fi
 
     if [ -d "${results_dir}" ]; then
 	read -p "${results_dir} exists, remove? Y/n" yn
 	case $yn in
-            [Yy]* ) echo yes; break;;
+            [Yy]* ) echo yes; ;;
             [Nn]* ) echo no; exit 1;;
             * ) echo "Please answer yes or no."; exit ;;
 	esac
     fi
 
-    # format_disk || exit 1
+    ssh guest "pkill fio"
+
+    format_disk || exit 1
 
     mkdir -p "${results_dir}"
     # results_dir rw bs jobs_nr iodepth
-    # one_test "${results_dir}" write 256k 1 1
+    one_test "${results_dir}" write 256k 1 1
 
 
     for load in randwrite randread trimwrite; do
@@ -308,9 +336,10 @@ main() {
 
 #get_zfs_params_json
 setup_ssh_config
-main zfs_untuned
+main zfs_untuned_p2
 # setup_ssh_config
-# write_sys_stat_json_head test_sys.json
-# write_sys_stat_json_tail test_sys.json
+# get_sample_with_fragmentation
+# write_sys_stat_json_head test_sys.json || exit 1
+# write_sys_stat_json_tail test_sys.json || exit 1
 # write_dm_tx_json_head test_dm_tx.json
 # write_dm_tx_json_tail test_dm_tx.json
