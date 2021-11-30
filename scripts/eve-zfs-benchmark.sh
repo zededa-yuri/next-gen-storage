@@ -177,10 +177,9 @@ monitor() {
     echo "[" >> "${output}"
     get_sample  >> "${output}"
     while true; do
-	echo monitor
 	echo ","  >> "${output}"
 	get_sample >> "${output}"
-	sleep 5
+	sleep 1
     done
 }
 
@@ -207,23 +206,13 @@ EOF
 }
 
 
-one_test_finish() {
-    out_dir="$1"
-    monitor_pid="$2"
-
-    echo "cleaning up.."
-    write_dm_tx_json_tail "${out_dir}"/zfs_dm_stats.json;
-    write_sys_stat_json_tail "${out_dir}"/sys_stats.json;
-    kill "${monitor_pid}"
-    wait "${monitor_pid}"
-}
-
 one_test() {
     results_dir="${1}"
-    FIO_rw="${2}"
-    FIO_bs="${3}"
-    FIO_nr_jobs="${4}"
-    FIO_iodepth="${5}"
+    FIO_data_size="${2}"
+    FIO_rw="${3}"
+    FIO_bs="${4}"
+    FIO_nr_jobs="${5}"
+    FIO_iodepth="${6}"
 
     test_name="${FIO_rw}-jobs${FIO_nr_jobs}-bs${FIO_bs}-iodepth${FIO_iodepth}"
     out_dir="${results_dir}/${test_name}"
@@ -240,10 +229,9 @@ one_test() {
     monitor_pid=$!
     sleep 2
 
-    # trap "one_test_finish ${out_dir} ${monitor_pid}" && return 1 SIGINT
-
     echo "Starting job ${out_dir}"
     export FIO_OUT_PATH
+    export FIO_data_size
     export FIO_bs
     export FIO_rw
     export FIO_nr_jobs
@@ -257,20 +245,32 @@ one_test() {
     fi
 
     # shellcheck disable=SC2029
-    ssh guest "fio fio-template.job \
+    local fio_command="fio fio-template.job \
 --output-format=json+,normal \
 --output=${FIO_OUT_PATH}/result.json \
 --group_reporting --eta-newline=1 \
 > ${FIO_OUT_PATH}/fio-log.txt
 "
     # shellcheck disable=SC2029
+    if ! ssh guest "${fio_command}"; then
+	echo "Failed runnning FIO"
+	kill "${monitor_pid}" && wait "${monitor_pid}"
+	exit 1
+    fi
+
+    # shellcheck disable=SC2029
     if ! scp -r guest:"${FIO_OUT_PATH}" "${out_dir}"; then
 	echo "failed downloading results"
+	kill "${monitor_pid}" && wait "${monitor_pid}"
 	return 1
     fi
 
     # shellcheck disable=SC2029
     ssh guest "rm -rf ${FIO_OUT_PATH}"
+    kill "${monitor_pid}"
+    write_dm_tx_json_tail "${out_dir}"/zfs_dm_stats.json;
+    write_sys_stat_json_tail "${out_dir}"/sys_stats.json;
+    wait "${monitor_pid}"
     echo "Done"
 }
 
@@ -335,17 +335,19 @@ main() {
 
     ssh guest "pkill fio"
 
+    trap "ssh guest 'pkill fio'" SIGINT
+
     format_disk || exit 1
 
     mkdir -p "${results_dir}"
-    # results_dir rw bs jobs_nr iodepth
-    one_test "${results_dir}" write 256k 1 1 || exit 1
+    # results_dir data_size rw bs jobs_nr iodepth
+    one_test "${results_dir}" 160G write 256k 1 1 || exit 1
 
 
-    for load in randwrite randread; do
-	for nr_jobs in 2 4; do
-	    for io_depth in 1 4; do
-		one_test "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
+    for load in randwrite; do
+	for nr_jobs in 2 ; do
+	    for io_depth in 4; do
+		one_test 62G "${results_dir}" "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
 	    done
 	done
     done
