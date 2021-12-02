@@ -131,8 +131,8 @@ get_sample()
     swapFree=$(echo "${meminfo}" | grep -E '^SwapFree:' | awk '{print $2}')
 
 
-    read -r CPUusage CPUsystem CPUidle << EOF
-$(grep 'cpu ' /proc/stat | awk '{print $2 " " $4 " " $5}')
+    read -r CPUuser CPUnice CPUsystem CPUidle CPUiowait CPUirq CPUsoftirq CPUsteal CPUguest ignore << EOF
+$(head -n1 /proc/stat | sed 's/cpu//g')
 EOF
 
     # Final result in JSON
@@ -149,9 +149,15 @@ EOF
   },
   \"cpu\":
   {
-    \"usage\": $CPUusage,
+    \"user\": $CPUuser,
+    \"nice\": $CPUnice,
     \"system\": $CPUsystem,
-    \"idle\": $CPUidle
+    \"idle\": $CPUidle,
+    \"iowait\": $CPUiowait,
+    \"irq\": $CPUirq,
+    \"softirq\": $CPUsoftirq,
+    \"steal\": $CPUsteal,
+    \"guest\": $CPUguest
   }
 }"
 
@@ -166,7 +172,7 @@ monitor() {
     #trap "echo ] >> ${output}" SIGINT
 
     # shellcheck disable=SC2064
-    trap "echo terminating monitor.. && echo ] >> ${output} && return 0" SIGTERM
+    trap "echo terminating monitor.. && echo ] >> ${output}; return 0" SIGTERM
 
     rm -f "${output}"
     if ! touch "${output}"; then
@@ -198,11 +204,14 @@ Host guest
   SendEnv FIO_*
 EOF
 
-    cp ssh-keys/* ~/.ssh/
+    cp ~/mnt/ssh-keys/* ~/.ssh/
 
     cat >> /root/.ssh/authorized_keys << EOF
+
+
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCoEmuzL43ZkQ2s4KBjJj1uanzwnmPAHhoI3x3BvGbRIc5vHnl3ZUu7QNtiu5uRnjN9cjt1ZpQfMjpSLdTLyMk6Q7CLSTZ69PtDjp74+CxkMnsMQj6BPFJdVrQtJayynyqOJsF9sbiH3cpV7fgBGOrLjonVtQYqk6I7Ia//G02oH9f4g9gV8Z8xU6BI6qgEZ3GVvN0Od6vtn+M7yVS8gwqry6edGpwTqf9DizNXKhIVHySbKxmrWOVBD2xa66pm8vwvPccTMYPY6WTt57Q/bGTuSaewSOdDfvOJB1YgVR+cyvhWsXJI1s27HDeYXrippN4JQhnC+7CgLN87CAvhE8mdA6mwngmCUOcuguX3KkY9INUJmHYy/j/zxO+Xh0NWThJP0ddtgMq/ewO2f2nHEuBd87UmuPwhYPlwaX3gLWzpqNFurw9IASDRVj5E59RuO06GtLds0rw6qB76lFymoVArb6oyNoSQsJ8crbPgl4qhgjqwiNouZqCQ051SQoc/DgM= yuri@Yuris-MacBook-Pro-16.local
 EOF
+
 }
 
 
@@ -250,6 +259,8 @@ one_test() {
 --group_reporting --eta-newline=1 \
 > ${FIO_OUT_PATH}/fio-log.txt
 "
+#--refill_buffers \
+
     # shellcheck disable=SC2029
     if ! ssh guest "${fio_command}"; then
 	echo "Failed runnning FIO"
@@ -310,13 +321,22 @@ format_disk() {
     sync && sleep 2
 }
 
+check_dependencies() {
+    command -v zpool > /dev/null || return 1
+    command -v rsync > /dev/null || return 1
+    command -v jq > /dev/null || return 1
+    command -v git > /dev/null || return 1
+}
+
+
 main() {
     results_dir="${1}"
     target_device=sdb
 
-    if ! command -v zpool; then
+
+    if ! check_dependencies; then
 	echo "installing dependencies"
-	apk update && apk add zfs rsync jq
+	apk update && apk add zfs rsync jq git
     fi
 
     if [ -d "${results_dir}" ]; then
@@ -340,7 +360,7 @@ main() {
     one_test "${results_dir}" fio-place-data.job write 256k 1 1 || exit 1
 
 
-    for load in read randread write randwrite trimwrite; do
+    for load in read randread write randwrite; do
 	for nr_jobs in 1 2; do
 	    for io_depth in 1 2 4 ; do
 		one_test "${results_dir}" fio-template.job "${load}" 64k "${nr_jobs}" "${io_depth}" || exit 1
@@ -351,10 +371,11 @@ main() {
 
 #get_zfs_params_json
 setup_ssh_config
-main zfs_untuned_p4
+main zfs_untuned_proper_cpu_p2
 # setup_ssh_config
 # get_sample_with_fragmentation
 # write_sys_stat_json_head test_sys.json || exit 1
 # write_sys_stat_json_tail test_sys.json || exit 1
 # write_dm_tx_json_head test_dm_tx.json
 # write_dm_tx_json_tail test_dm_tx.json
+#get_sample
