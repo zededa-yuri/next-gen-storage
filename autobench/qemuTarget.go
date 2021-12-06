@@ -22,6 +22,7 @@ import (
 type QemuCommand struct {
 	CQemuConfigDir string `short:"c" long:"config" description:"The option takes the path to the QEMU configuration file"`
 	CFileLocation  string `short:"i" long:"image" description:"The option takes the path to the .img file" default:"bionic-server-cloudimg-i386.img"`
+	CSizeDiskGb	   int    `short:"s" long:"size" description:"The total size for logical volume in Gb" default:"60"`
 	CFormat        string `short:"f" long:"format" description:"Format options " default:"raw"`
 	CVCpus         string `short:"v" long:"vcpu" description:"VCpu and core counts" default:"2"`
 	CUser          string `short:"u" long:"user" description:"A user name for VM connections" default:"ubuntu"`
@@ -191,6 +192,7 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		vm.iblockId = fmt.Sprintf("fiotest%d_iblock", vm.port)
 		vm.userImg = filepath.Join(getSelfPath(), "user-data.img")
 		vm.imgPath, err = getVMImage(i, qemuCmd.CFileLocation)
+
 		if err != nil {
 			return fmt.Errorf("create VM with adress localhost:%d failed! err:\n%v", vm.port, err)
 		}
@@ -206,14 +208,15 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		}
 
 		if qemuCmd.CZfs || qemuCmd.CLvm {
+			FioOptions.SizeGb = qemuCmd.CSizeDiskGb - 1
 			if qemuCmd.CZfs {
-				if err := vhost.CreateZvol("fiotest", vm.shareVolName, opts.SizeDiskGb + 2); err != nil {
+				if err := vhost.CreateZvol("fiotest", vm.shareVolName, qemuCmd.CSizeDiskGb); err != nil {
 					return fmt.Errorf("create zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}
 				vm.wwnAdress, err = vhost.SetupVhost(vm.zfsDevice, vm.iblockId)
 			} else {
-				if err := vhost.LVcreate(vm.shareVolName, "fiotest", opts.SizeDiskGb + 2); err != nil {
+				if err := vhost.LVcreate(vm.shareVolName, "fiotest", qemuCmd.CSizeDiskGb); err != nil {
 					return fmt.Errorf("create lvmVol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}

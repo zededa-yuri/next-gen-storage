@@ -10,7 +10,7 @@ import (
 
 type Options struct {
 	TimeOneTest        int 	  `short:"t" long:"time" description:"The time that each test will run in sec" default:"60"`
-	SizeDiskGb		   int    `short:"s" long:"size" description:"The total size of file I/O for each thread of this job in Gb" required:"true"`
+	SizeDiskGb		   int    `short:"s" long:"size" description:"The total size of file I/O for each thread of this job in Gb" default:"1"`
 	OpType             string `short:"o" long:"optype" description:"Operation types I/O for fio config" default:"read,write"`
 	BlockSize          string `short:"b" long:"bs" description:"Block size for fio config"  default:"4k,64k,1m"`
 	Iodepth            string `short:"d" long:"iodepth" description:"Iodepth for fio config" default:"8,16,32"`
