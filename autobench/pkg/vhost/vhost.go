@@ -140,7 +140,7 @@ func DestroyZpool(zpoolName string) error {
 	// Need handle to pool at first place
 	output, err := exec.Command("zpool", "destroy", zpoolName).CombinedOutput()
 	if err != nil {
-		fmt.Printf("Failed to destroy zvol: log:%s err:%w", output, err)
+		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
@@ -159,7 +159,7 @@ func DestroyZvol(zpoolName, zvolName string) error {
 	output, err := exec.Command("zfs", "destroy",
 					fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
-		fmt.Printf("Failed to destroy zvol: log:%s err:%w", output, err)
+		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
