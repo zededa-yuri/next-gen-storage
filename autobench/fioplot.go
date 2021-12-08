@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
+	"io"
 	"io/fs"
 	"io/ioutil"
 	"math"
@@ -83,9 +85,14 @@ type LogLine struct {
 	value    int
 	opType   int // read - 0 ; write - 1 ; trim - 2
 }
+type GroupLogFiles struct {
+	filesPath 		[]string
+	patternName 	string
+	minCountLine 	int
+}
 
+type LogGF []*GroupLogFiles
 type LogFile []*LogLine
-
 type legensTable []*allLegendResults
 type patternsTable []*allPatternResults
 type AllRes []*listAllResults
@@ -438,6 +445,23 @@ func initBarCharts(dirWithCSV, descriptionForGraphs string) error {
 	return nil
 }
 
+func (t *LogFile) SaveFile(filePath string, countLine int) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error create file [%s] %w", filePath, err)
+	}
+	defer file.Close()
+
+	for index, line := range *t {
+		if index == countLine {
+			break
+		}
+		file.WriteString(fmt.Sprintf("%d, %d, %d, 0\n", line.time, line.value, line.opType))
+	}
+
+	return nil
+}
+
 func (t *LogFile) parsingLogfile(filePath string) error {
 	logFile, err := os.Open(filePath)
 	if err != nil {
@@ -590,29 +614,139 @@ func (t *LogFile) createLogChart(data LogFile, logType int, yName, testName, dis
 	return nil
 }
 
+func lineCounter(r io.Reader) (int, error) {
+    buf := make([]byte, 32*1024)
+    count := 0
+    lineSep := []byte{'\n'}
+
+    for {
+        c, err := r.Read(buf)
+        count += bytes.Count(buf[:c], lineSep)
+
+        switch {
+        case err == io.EOF:
+            return count, nil
+
+        case err != nil:
+            return count, err
+        }
+    }
+}
+
+func getCountLineInFile(path string) int {
+	file, _ := os.Open(path)
+	countLine, err := lineCounter(file)
+	if err != nil {
+		fmt.Println("counting line in file failed! error:%w", path, err)
+		return 0
+	}
+	return countLine
+}
+
+func (t *LogGF) SepareteLogs(fileList []fs.FileInfo, sessonPath string) error {
+	haveName := false
+	for _, file := range fileList {
+		fTable := GroupLogFiles{}
+		countLine := getCountLineInFile(fmt.Sprintf("%s/%s", sessonPath, file.Name()))
+		fullPathToFile := fmt.Sprintf("%s/%s", sessonPath, file.Name())
+		patternFile := strings.Split(file.Name(), ".")[0]
+		haveName = false
+		for _, value := range *t {
+			if value.patternName == patternFile {
+				value.filesPath = append(value.filesPath, fullPathToFile)
+				if value.minCountLine > countLine {
+					value.minCountLine = countLine
+				}
+				haveName = true
+			}
+		}
+		if !haveName {
+			fTable.patternName = patternFile
+			fTable.filesPath = append(fTable.filesPath, fullPathToFile)
+			fTable.minCountLine = countLine
+			*t = append(*t, &fTable)
+		}
+	}
+	return nil
+}
+
+func (t *LogGF) GluingFiles(resultsDir string) error {
+	for _, value := range *t {
+		var logDataMainFile = make(LogFile, 0)
+		logDataMainFile.parsingLogfile(value.filesPath[0])
+		if len(value.filesPath) == 1 {
+			// There is nothing to glue here, just saving the file
+			err := logDataMainFile.SaveFile(filepath.Join(resultsDir, fmt.Sprintf("%s.log", value.patternName)), value.minCountLine)
+			if err != nil {
+				return fmt.Errorf("error create file %w", err)
+			}
+			continue
+
+		}
+		for index := 1; index < len(value.filesPath); index++ {
+			var logTmpFile = make(LogFile, 0)
+			logTmpFile.parsingLogfile(value.filesPath[index])
+
+			for line := 0; line < value.minCountLine; line++ {
+				logDataMainFile[line].value += logTmpFile[line].value
+			}
+		}
+
+		err := logDataMainFile.SaveFile(filepath.Join(resultsDir, fmt.Sprintf("%s.log", value.patternName)), value.minCountLine)
+		if err != nil {
+			return fmt.Errorf("error create file %w", err)
+		}
+	}
+	return nil
+}
+
+func GetLogFilesFromGroup(dirWithLogs, mainResultsAbsDir string, fileList []fs.FileInfo) error {
+
+	var logGroupF = make(LogGF, 0)
+	logGroupF.SepareteLogs(fileList, dirWithLogs)
+	logGroupF.GluingFiles(mainResultsAbsDir)
+
+	return nil
+}
+
 func initLogCharts(dirWithLogs, discription string) error {
 	ex, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 
-	mainResultsAbsDir := filepath.Join(filepath.Dir(ex), "logCharts")
-	err = os.Mkdir(mainResultsAbsDir, 0755)
+	mainResultsAbsDirCharts := filepath.Join(filepath.Dir(ex), "logCharts")
+	err = os.Mkdir(mainResultsAbsDirCharts, 0755)
 	if err != nil {
 		return fmt.Errorf("could not create local dir for result: %w", err)
 	}
 
-	fileWithResults, err := readDirWithResults(dirWithLogs)
+	mainLogsAbsDir := filepath.Join(filepath.Dir(ex), "GluedLogFiles")
+	err = os.Mkdir(mainLogsAbsDir, 0755)
 	if err != nil {
-		return fmt.Errorf("could not read dir with CSV files: %w", err)
+		return fmt.Errorf("could not create local dir %s for result: %w", mainLogsAbsDir, err)
+	}
+
+	fileWithResultsSrc, err := readDirWithResults(dirWithLogs)
+	if err != nil {
+		return fmt.Errorf("could not read dir with log files: %w", err)
+	}
+
+	if err := GetLogFilesFromGroup(dirWithLogs, mainLogsAbsDir, fileWithResultsSrc); err != nil {
+		return fmt.Errorf("could not glued log files: %w", err)
+	}
+
+	fileWithResults, err := readDirWithResults(mainLogsAbsDir)
+	if err != nil {
+		return fmt.Errorf("could not read dir with log files: %w", err)
 	}
 
 	for _, fileName := range fileWithResults {
 		if !fileName.IsDir() {
  			var logData = make(LogFile, 0)
 			fType, yName, testName, _  := getInfoAboutLogFile(fileName.Name())
-			logData.parsingLogfile(filepath.Join(dirWithLogs, fileName.Name()))
-			logData.createLogChart(logData, fType, yName, testName, discription, mainResultsAbsDir)
+			logData.parsingLogfile(filepath.Join(mainLogsAbsDir, fileName.Name()))
+			logData.createLogChart(logData, fType, yName, testName, discription, mainResultsAbsDirCharts)
 		}
 	}
 	return nil
