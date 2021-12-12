@@ -28,11 +28,16 @@ type QemuCommand struct {
 	CUser          string `short:"u" long:"user" description:"A user name for VM connections" default:"ubuntu"`
 	CMemory        string `short:"m" long:"memory" description:"RAM memory value" default:"512"`
 	CPassword      string `short:"x" long:"password" description:"Format options " default:"asdfqwer"`
-	CPort          int    `short:"p" long:"port" description:"Port for connect to VM" default:"6666"`
+	CPort          int    `short:"p" long:"port" description:"Port for connect to VM" default:"7890"`
 	CCountVM       int    `short:"n" long:"vmcount" description:"Count create VM" default:"1"`
-	CZfs           bool   `short:"z" long:"zfs" description:"Create zfs volume and share to vm via VHost"`
-	CTargetDisk    string `short:"d" long:"disktarget" description:"Path to device for create zpool or lvm"`
 	CLvm           bool   `short:"l" long:"lvm" description:"Create lvm volume and share to vm via VHost"`
+	CZfs           bool   `short:"z" long:"zfs" description:"Create zvol and share to vm via VHost"`
+	CBsZfs         string `short:"b" long:"blocksize" description:"Blocksize properties for zvol" default:"16k"`
+	CZipZFS		   string `short:"a" long:"compression" description:"Compression properties for zvol." default:"on"`
+	CPRcacheZFS	   string `short:"o" long:"primarycache" description:"Primarycache properties for zvol." default:"metadata"`
+	CLogbiasZFS	   string `short:"w" long:"logbias" description:"Logbias properties for zvol." default:"throughput"`
+	CRdMetadataZFS string `short:"r" long:"metadata" description:"Redundant_metadata properties for zvol." default:"most"`
+	CTargetDisk    string `short:"d" long:"disktarget" description:"Path to device for create zpool or lvm"`
 }
 
 var qemuCmd QemuCommand
@@ -210,7 +215,10 @@ func (t *VMlist) AllocateVM(ctx context.Context, totalTime time.Duration) error 
 		if qemuCmd.CZfs || qemuCmd.CLvm {
 			FioOptions.SizeGb = qemuCmd.CSizeDiskGb - 1
 			if qemuCmd.CZfs {
-				if err := vhost.CreateZvol("fiotest", vm.shareVolName, qemuCmd.CSizeDiskGb); err != nil {
+				if err := vhost.CreateZvol("fiotest", vm.shareVolName,
+											qemuCmd.CBsZfs, qemuCmd.CZipZFS,
+											qemuCmd.CPRcacheZFS, qemuCmd.CLogbiasZFS,
+											qemuCmd.CRdMetadataZFS, qemuCmd.CSizeDiskGb); err != nil {
 					return fmt.Errorf("create zvol:[%s] for VM with adress localhost:%d failed! err:\n%v",
 						vm.shareVolName, vm.port, err)
 				}

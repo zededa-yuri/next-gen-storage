@@ -16,7 +16,7 @@ func PVcreate(diskPath string) error {
 	//pvcreate /dev/sdb1
 	output, err := exec.Command("pvcreate", diskPath).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to pvcreate: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to pvcreate: err:[%w] output:[%s]", err, output)
 	}
 
 	return nil
@@ -27,7 +27,7 @@ func VGcreate(diskPath, vgName string) error {
 	// vgcreate testvg /dev/sdb1
 	output, err := exec.Command("vgcreate", vgName, diskPath).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to vgcreate: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to vgcreate: err:[%w] output:[%s]", err, output)
 	}
 
 	return nil
@@ -40,7 +40,7 @@ func LVcreate(lvName, vgName string, sizeDisk int) error {
 								fmt.Sprintf("%dG", sizeDisk), "--name",
 								lvName, vgName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to LVcreate: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to LVcreate: err:[%w] output:[%s]", err, output)
 	}
 
 	return nil
@@ -51,7 +51,7 @@ func PVremove(targetDisk string) error {
 	//pvremove /dev/sdb1
 	output, err := exec.Command("pvremove", "-y", targetDisk).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to pvremove: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to pvremove: err:[%w] output:[%s]", err, output)
 	}
 	return nil
 }
@@ -61,7 +61,7 @@ func VGremove(vgName string) error {
 	//vgremove testvg
 	output, err := exec.Command("vgremove", "-y", vgName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to vgremove: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to vgremove: err:[%w] output:[%s]", err, output)
 	}
 	return nil
 }
@@ -72,7 +72,7 @@ func LVremove(lvName, vgName string) error {
 	lvpath := filepath.Join("/dev/", vgName, lvName)
 	output, err := exec.Command("lvremove", "-y", lvpath).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to lvremove: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to lvremove: err:[%w] output:[%s]", err, output)
 	}
 	return nil
 }
@@ -91,13 +91,13 @@ func DestroyLvm(targetDisk, vgName string) error {
 
 func CheckConfigFS() error {
 	if _, err := os.Stat(tgtPath); err != nil {
-		return fmt.Errorf("Target access error (%s): %v", tgtPath, err)
+		return fmt.Errorf("target access error (%s): %v", tgtPath, err)
 	}
 	if _, err := os.Stat(corePath); err != nil {
-		return fmt.Errorf("Target core access error (%s): %s", corePath, err)
+		return fmt.Errorf("target core access error (%s): %s", corePath, err)
 	}
 	if _, err := os.Stat(vhostPath); err != nil {
-		return fmt.Errorf("VHOST access error (%s): %s", vhostPath, err)
+		return fmt.Errorf("vHOST access error (%s): %s", vhostPath, err)
 	}
 	return nil
 }
@@ -105,10 +105,10 @@ func CheckConfigFS() error {
 func CheckLvmOnSystem() error {
 	output, err := exec.Command("lvm", "version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to collect tools data (lvm)! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("failed to collect tools data (lvm)! output:[%s] err:[%w]", output, err)
 	}
 	if err := CheckConfigFS(); err != nil {
-		return fmt.Errorf("Failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
 	}
 	return nil
 }
@@ -116,10 +116,10 @@ func CheckLvmOnSystem() error {
 func CheckZfsOnSystem() error {
 	output, err := exec.Command("zfs", "version").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to collect tools data (zfs)! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("failed to collect tools data (zfs)! output:[%s] err:[%w]", output, err)
 	}
 	if err := CheckConfigFS(); err != nil {
-		return fmt.Errorf("Failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
+		return fmt.Errorf("failed to checked ConfigFS! output:[%s] err:[%w]", output, err)
 	}
 	return nil
 }
@@ -131,7 +131,7 @@ func CreateZpool(zpoolName, targetDisk string) (error) {
 	// Workaround if something went wrong with specifying parameters
 	output, err := exec.Command("zpool", "create", "-fd", zpoolName, targetDisk).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to create zpool: err:[%w] output:[%s]", err, output)
+		return fmt.Errorf("failed to create zpool: err:[%w] output:[%s]", err, output)
 	}
 	return nil
 }
@@ -140,17 +140,24 @@ func DestroyZpool(zpoolName string) error {
 	// Need handle to pool at first place
 	output, err := exec.Command("zpool", "destroy", zpoolName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
+		return fmt.Errorf("failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
 
-func CreateZvol(zpoolName, zvolName string, sizeDisk int) error {
+func CreateZvol(zpoolName, zvolName, bs, zip, prcache, logbias,
+				redundant_metadata string, sizeDisk int) error {
 	//zfs create -V 1G tank/disk1
-	output, err := exec.Command("zfs", "create", "-V", fmt.Sprintf("%dG", sizeDisk),
+	output, err := exec.Command("zfs", "create",
+								"-V", fmt.Sprintf("%dG", sizeDisk),
+								"-o", fmt.Sprintf("volblocksize=%s", bs),
+								"-o", fmt.Sprintf("compression=%s", zip),
+								"-o", fmt.Sprintf("primarycache=%s", prcache),
+								"-o", fmt.Sprintf("logbias=%s", logbias),
+								"-o", fmt.Sprintf("redundant_metadata=%s", redundant_metadata),
 	 							fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to create zvol: log:%s err:%w", output, err)
+		return fmt.Errorf("failed to create zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
@@ -159,7 +166,7 @@ func DestroyZvol(zpoolName, zvolName string) error {
 	output, err := exec.Command("zfs", "destroy",
 					fmt.Sprintf("%s/%s", zpoolName, zvolName)).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("Failed to destroy zvol: log:%s err:%w", output, err)
+		return fmt.Errorf("failed to destroy zvol: log:%s err:%w", output, err)
 	}
 	return nil
 }
