@@ -12,7 +12,7 @@ import (
 const globalTpl = `[global]
 ioengine=libaio
 size=%dG
-direct=1
+direct=%s
 runtime=%s
 time_based=1
 group_reporting=1
@@ -24,7 +24,7 @@ log_avg_msec=250
 const globalTplcheckSumm = `[global]
 ioengine=libaio
 size=%dG
-direct=1
+direct=%s
 runtime=%s
 verify=%s
 verify_fatal=1
@@ -152,6 +152,7 @@ type FioOptions struct {
 	BlockSize   BSType
 	Jobs      	JobsType
 	Iodepth     DepthType
+	Direct		string
 	CheckSumm	string
 	SizeGb      int
 }
@@ -221,9 +222,9 @@ func GenerateFIOConfig(
 	defer fd.Close()
 
 	if cfg.CheckSumm != "" {
-		fmt.Fprintf(fd, globalTplcheckSumm, cfg.SizeGb, sTime, cfg.CheckSumm, ftPath)
+		fmt.Fprintf(fd, globalTplcheckSumm, cfg.SizeGb, cfg.Direct, sTime, cfg.CheckSumm, ftPath)
 	} else {
-		fmt.Fprintf(fd, globalTpl, cfg.SizeGb, sTime, ftPath)
+		fmt.Fprintf(fd, globalTpl, cfg.SizeGb, cfg.Direct, sTime, ftPath)
 	}
 
 	for _, rw := range cfg.Operations {

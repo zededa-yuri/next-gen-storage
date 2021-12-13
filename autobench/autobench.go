@@ -16,6 +16,7 @@ type Options struct {
 	Iodepth            string `short:"d" long:"iodepth" description:"Iodepth for fio config" default:"8,16,32"`
 	CheckSumm          string `short:"c" long:"check" description:"Data integrity check. Can be one of the following values: (md5, crc64, crc32c, ..., sha256)"`
 	Jobs               string `short:"j" long:"jobs" description:"Jobs for fio config" default:"1,8"`
+	Direct			   string `short:"i" long:"direct" description:"Direct properties for fio config" default:"1"`
 	TargetFIODevice    string `short:"D" long:"targetdev" description:"[Optional] To specify block device as a target for FIO. Needs superuser rights (-u=root)."`
 	LocalFolderResults string `short:"f" long:"folder" description:"[Optional] A name of folder with tests results" default:"FIOTestsResults"`
 	LocalDirResults    string `short:"l" long:"localpath" description:"[Optional] Path to directory with test results"`
@@ -54,6 +55,7 @@ func InitFioOptions() error {
 	}
 
 	FioOptions.SizeGb = opts.SizeDiskGb
+	FioOptions.Direct = opts.Direct
 
 	if opts.CheckSumm != "" {
 		var valid = []string{"md5", "crc64", "crc32c", "crc32c-intel", "crc32", "crc16", "crc7", "xxhash", "sha512", "sha256", "sha1", "meta"}
