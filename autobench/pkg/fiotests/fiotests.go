@@ -67,6 +67,77 @@ func GetMemoryDump(timeSecondsForOneTest int, dirForResults string, countTests i
 	return nil
 }
 
+// GetCpuDump - gets cpu usage data once per second for each group of tests.
+// Support only on Linux OS
+func GetCPUdump(timeSecondsForOneTest int, dirForResults string, countTests int) error {
+	if runtime.GOOS == "linux" {
+		mainResultsAbsDir := filepath.Join(dirForResults, "CPUdumps")
+		err := os.Mkdir(mainResultsAbsDir, 0755)
+		if err != nil {
+			return fmt.Errorf("could not create local dir for memory dums: %w", err)
+		}
+
+		fs, err := procfs.NewFS("/proc")
+		if err != nil {
+			return fmt.Errorf("could not get procfs mounted point. err: %w", err)
+		}
+
+
+		for i := 0; i < countTests; i++ {
+			resPathFile := filepath.Join(mainResultsAbsDir, fmt.Sprintf("CPUdumpTestID-%d.csv", i))
+			file, err := os.Create(resPathFile)
+			if err != nil{
+				return fmt.Errorf("failed to create file with memory dump information: %w", err)
+			}
+			defer file.Close()
+
+			_, err = file.WriteString("Seconds,User,Nice,System,Idle,Iowait,IRQ,SoftIRQ,Steal,Guest,GuestNice,Total,avg_load\n")
+			if err != nil {
+				return fmt.Errorf("failed write title to file CSV: %w", err)
+			}
+
+			var userS, niceS, systS, idleS float64
+			firstStats, err := fs.Stat()
+			if err != nil {
+				return fmt.Errorf("could not get info from /proc/stat [firstStats] err: %w", err)
+			}
+			userS = firstStats.CPUTotal.User
+			niceS = firstStats.CPUTotal.Nice
+			systS = firstStats.CPUTotal.System
+			idleS = firstStats.CPUTotal.Idle
+
+			for sec := 0; sec < timeSecondsForOneTest; sec++ {
+				stats, err := fs.Stat()
+				if err != nil {
+					return fmt.Errorf("could not get info from /proc/stat err: %w", err)
+				}
+				ud := stats.CPUTotal.User - userS
+				nd := stats.CPUTotal.Nice - niceS
+				sd := stats.CPUTotal.System - systS
+				id := stats.CPUTotal.Idle - idleS
+				total := ud + nd + sd + id
+				avg_load := (ud + nd + sd)/total
+				data := fmt.Sprintf("%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f\n", sec,
+							stats.CPUTotal.User, stats.CPUTotal.Nice, stats.CPUTotal.System,
+							stats.CPUTotal.Idle, stats.CPUTotal.Iowait, stats.CPUTotal.IRQ,
+							stats.CPUTotal.SoftIRQ, stats.CPUTotal.Steal, stats.CPUTotal.Guest,
+							stats.CPUTotal.GuestNice, total, avg_load)
+
+				_, err = file.WriteString(data)
+				if err != nil {
+					return fmt.Errorf("failed write data to file CSV: %w", err)
+				}
+				userS = stats.CPUTotal.User
+				niceS = stats.CPUTotal.Nice
+				systS = stats.CPUTotal.System
+				idleS = stats.CPUTotal.Idle
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}
+	return nil
+}
+
 func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults, targetDevice string, fioOptions mkconfig.FioOptions, fioTestTime time.Duration) error {
 	curentDate := fmt.Sprintf(time.Now().Format("2006-01-02-15:04:05"))
 
@@ -145,10 +216,12 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 
 	//Run get memory dumps
 	go GetMemoryDump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
+	//Run get CPU dumps
+	go GetCPUdump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
 
 	// Run fio test  [!WE NEED SUDO PRIVILEGES HERE]
 	fioRunCmd := fmt.Sprintf(
-		"sudo fio %s --output-format=normal,json > %s & ",
+		"sudo fio %s --output-format=normal,json --output=%s & ",
 		filepath.Join(remoteResultsAbsDir, "/fio_config.cfg"),
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	)
@@ -186,13 +259,6 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		filepath.Join(remoteResultsAbsDir, "/result.json"),
 	); err != nil {
 		return fmt.Errorf("could not get result.json file from VM: %w", err)
-	}
-
-	if err := fioconv.ConvertJSONtoCSV(
-		filepath.Join(localResultsAbsDir, "/result.json"),
-		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
-	); err != nil {
-		fmt.Println("Attention! Could not convert JSON to CSV:", err)
 	}
 
 	if err := sshwork.SendCommandSSH(
@@ -249,6 +315,13 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
     	file.WriteString(string(output))
 	}
 
+	if err := fioconv.ConvertJSONtoCSV(
+		filepath.Join(localResultsAbsDir, "/result.json"),
+		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
+	); err != nil {
+		fmt.Println("Attention! Could not convert JSON to CSV:", err)
+	}
+
 	return nil
 }
 
@@ -289,6 +362,9 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 
 	//Run get memory dumps
 	go GetMemoryDump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
+	//Run get CPU dumps
+	go GetCPUdump(int(fioTestTime.Seconds()), localResultsAbsDir, countTests)
+
 
 	go func() {
 		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"),
