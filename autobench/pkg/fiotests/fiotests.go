@@ -251,6 +251,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		}
 	}
 
+	time.Sleep(1 * time.Minute)
 	// Download fio reults
 	fmt.Println("Downloading the results ...")
 	if err := sshwork.GetFileSCP(
@@ -400,13 +401,6 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 		return fmt.Errorf("FIO test failed: %w", err)
 	}
 
-	if err := fioconv.ConvertJSONtoCSV(
-		filepath.Join(localResultsAbsDir, "/result.json"),
-		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
-	); err != nil {
-		fmt.Println("Attention! Could not convert JSON to CSV: %w", err)
-	}
-
 	// Save local dmesg file
 	out, err := exec.Command("cp", "/var/log/dmesg", filepath.Join(localResultsAbsDir, "/host_dmesg")).CombinedOutput()
 	if err != nil {
@@ -425,6 +419,13 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
     }
     defer file.Close()
     file.WriteString(string(output))
+
+	if err := fioconv.ConvertJSONtoCSV(
+		filepath.Join(localResultsAbsDir, "/result.json"),
+		filepath.Join(localResultsAbsDir, "/FIOresult.csv"),
+	); err != nil {
+		fmt.Println("Attention! Could not convert JSON to CSV: %w", err)
+	}
 
 	fmt.Println("Tests finished!")
 	return nil
