@@ -261,6 +261,11 @@ one_test() {
 "
 #--refill_buffers \
 
+    ssh guest "echo -e '\n-- Command --\n'  > ${FIO_OUT_PATH}/fio-args.txt"
+    ssh guest "echo \"${fio_command}\" >> ${FIO_OUT_PATH}/fio-args.txt"
+    ssh guest "echo -e '\n-- Job file--\n'  >> ${FIO_OUT_PATH}/fio-args.txt"
+    ssh guest "envsubst < ${template} >> ${FIO_OUT_PATH}/fio-args.txt"
+
     # shellcheck disable=SC2029
     if ! ssh guest "${fio_command}"; then
 	echo "Failed runnning FIO"
