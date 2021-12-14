@@ -331,6 +331,7 @@ check_dependencies() {
     command -v rsync > /dev/null || return 1
     command -v jq > /dev/null || return 1
     command -v git > /dev/null || return 1
+    command -v htop > /dev/null || return 1
 }
 
 
@@ -341,7 +342,7 @@ main() {
 
     if ! check_dependencies; then
 	echo "installing dependencies"
-	apk update && apk add zfs rsync jq git
+	apk update && apk add zfs rsync jq git htop
     fi
 
     if [ -d "${results_dir}" ]; then
