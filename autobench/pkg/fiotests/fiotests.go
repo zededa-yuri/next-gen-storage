@@ -211,7 +211,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 
 	// Waiting end fio test
 	var countTests = mkconfig.CountTests(fioOptions)
-	const bufferTime = 50 * time.Second
+	const bufferTime = 60 * time.Second
 	var totalTime = time.Duration(int64(countTests) * int64(fioTestTime) + int64(bufferTime))
 
 	//Run get memory dumps
@@ -234,7 +234,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 
 	// Heartbeat
 	timerTomeOut := time.After(totalTime)
-	ticker := time.NewTicker(1 * time.Minute)
+	ticker := time.NewTicker(90 * time.Second)
 	defer ticker.Stop()
 
 	there:
@@ -251,7 +251,6 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		}
 	}
 
-	time.Sleep(1 * time.Minute)
 	// Download fio reults
 	fmt.Println("Downloading the results ...")
 	if err := sshwork.GetFileSCP(
@@ -354,7 +353,7 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 
 	// Create config for fio
 	localFioConfig := filepath.Join(localResultsAbsDir, "fio_config.cfg")
-	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, user, targetDevice, localResultsAbsDir)
+	mkconfig.GenerateFIOConfig(fioOptions, fioTestTime, localFioConfig, user, targetDevice, localResultsAbsDirLogs)
 
 	// Waiting end fio test
 	var countTests = mkconfig.CountTests(fioOptions)
@@ -369,9 +368,8 @@ func RunFIOTestLocal(user, localResultsFolder, localDirResults, targetDevice str
 
 	go func() {
 		_, err := exec.Command("fio", filepath.Join(localResultsAbsDir, "/fio_config.cfg"),
-								"--output-format=normal,json", ">>",
-								filepath.Join(localResultsAbsDir,
-								"/result.json")).CombinedOutput()
+								"--output-format=normal,json",
+								fmt.Sprintf("--output=%s", filepath.Join(localResultsAbsDir,"/result.json"))).CombinedOutput()
 		if err != nil {
 			fmt.Println("Failed to exec FIO command! ", err)
 		}

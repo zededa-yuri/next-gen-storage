@@ -365,7 +365,7 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	}
 
 	var countTests = mkconfig.CountTests(FioOptions)
-	const bufferTime = 3 * time.Minute
+	const bufferTime = 5 * time.Minute
 	var totalTime = time.Duration(int64(countTests)*int64(time.Duration(opts.TimeOneTest) * time.Second) + int64(bufferTime))
 
 	if qemuCmd.CZfs && qemuCmd.CTargetDisk != "" {
