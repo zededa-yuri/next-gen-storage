@@ -251,6 +251,14 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		}
 	}
 
+	for {
+		if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
+			break
+		}
+		fmt.Println("Waiting...")
+		time.Sleep(5 * time.Second)
+	}
+
 	// Download fio reults
 	fmt.Println("Downloading the results ...")
 	if err := sshwork.GetFileSCP(
