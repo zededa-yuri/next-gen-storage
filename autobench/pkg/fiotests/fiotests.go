@@ -251,7 +251,7 @@ func RunFIOTest(client *ssh.Client, sshUser, localResultsFolder, localDirResults
 		}
 	}
 
-	for {
+	for i := 0; i < 60; i++ {
 		if err := sshwork.SendCommandSSH(client, "pgrep fio", true); err != nil {
 			break
 		}

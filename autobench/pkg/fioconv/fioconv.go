@@ -149,7 +149,7 @@ func formatCSV(in fioJSON, to io.Writer) error {
 			v.TestOption.BS,
 			v.TestOption.IODepth,
 			v.TestOption.NumJobs,
-			fmt.Sprintf("%v", mbps(bw)),
+			fmt.Sprintf("%.2f", mbps(bw)),
 			fmt.Sprintf("%v", bwMin),
 			fmt.Sprintf("%v", bwMax),
 			fmt.Sprintf("%d",iopsMin),
