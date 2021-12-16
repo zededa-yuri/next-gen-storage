@@ -365,7 +365,7 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	}
 
 	var countTests = mkconfig.CountTests(FioOptions)
-	const bufferTime = 5 * time.Minute
+	const bufferTime = 6 * time.Minute
 	var totalTime = time.Duration(int64(countTests)*int64(time.Duration(opts.TimeOneTest) * time.Second) + int64(bufferTime))
 
 	if qemuCmd.CZfs && qemuCmd.CTargetDisk != "" {
@@ -373,19 +373,19 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 			return fmt.Errorf("ZFS not found: %v", err)
 		}
 		if err := vhost.CreateZpool("fiotest", qemuCmd.CTargetDisk); err != nil {
-			return fmt.Errorf("Create zpool failed: %v", err)
+			return fmt.Errorf("create zpool failed: %v", err)
 		}
 	}
 
 	if qemuCmd.CLvm && qemuCmd.CTargetDisk != "" {
 		if err := vhost.CheckLvmOnSystem(); err != nil {
-			return fmt.Errorf("LVM not found: %v", err)
+			return fmt.Errorf("lvm not found: %v", err)
 		}
 		if err := vhost.PVcreate(qemuCmd.CTargetDisk); err != nil {
-			return fmt.Errorf("PVcreate failed: %v", err)
+			return fmt.Errorf("pvcreate failed: %v", err)
 		}
 		if err := vhost.VGcreate(qemuCmd.CTargetDisk, "fiotest"); err != nil {
-			return fmt.Errorf("VGcreate failed: %v", err)
+			return fmt.Errorf("vgcreate failed: %v", err)
 		}
 	}
 
@@ -393,7 +393,7 @@ func RunCommand(ctx context.Context, virtM VMlist) error {
 	err := virtM.AllocateVM(ctxVMs, totalTime)
 	if err != nil {
 		cancelVMS()
-		return fmt.Errorf("VM create in QEMU failed err:%v", err)
+		return fmt.Errorf("vm create in QEMU failed err:%v", err)
 	}
 
 	for _, vm := range virtM {

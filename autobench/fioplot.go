@@ -209,6 +209,8 @@ func countingSizeCanvas(countBar int) (font.Length, font.Length) {
 		return 30 * vg.Inch, 7 * vg.Inch
 	} else if countBar > 60 {
 		return 55 * vg.Inch, 12 * vg.Inch
+	} else if countBar > 100 {
+		return 110 * vg.Inch, 12 * vg.Inch
 	}
 
 	return 10 * vg.Inch, 7 * vg.Inch
@@ -337,14 +339,14 @@ func (t *patternsTable) createBarCharts(table patternsTable, description, dirPat
 	var lTable = make(legensTable, 0)
 	lTable.getLegendsTable(table)
 	p, _ := plotCreate(lTable[0].fileName, lTable[0].yDiscription, description, float64(len(table)))
-	w := vg.Points(7)
+	w := vg.Points(3)
 	start := 0 - w
 	for k := 0; k < len(lTable); k++ {
 		var data plotter.Values
 		data = lTable[k].value
 		bars, _ := plotter.NewBarChart(data, w)
 		bars.LineStyle.Width = vg.Length(0)
-		bars.Width = font.Length(4)
+		bars.Width = font.Length(2)
 		bars.Color = plotutil.Color(k)
 
 		start = start + w
@@ -358,7 +360,7 @@ func (t *patternsTable) createBarCharts(table patternsTable, description, dirPat
 	for i, name := range table {
 		ticks[i] = plot.Tick{float64(i), name.patternName}
 	}
-	p.X.Tick.Width = font.Length(12)
+	p.X.Tick.Width = font.Length(8)
 	p.X.Tick.Marker = plot.ConstantTicks(ticks)
 	p.X.Tick.Label.XAlign = -0.8
 
