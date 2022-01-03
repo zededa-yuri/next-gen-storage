@@ -18,6 +18,7 @@ import (
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
+	"github.com/xuri/excelize/v2"
 )
 
 type PlotCommand struct {
@@ -25,6 +26,7 @@ type PlotCommand struct {
 	CBarCharts		bool 	`short:"b" long:"barcharts" description:"Generate Bar Charts from CSV files"`
 	CLogCharts		bool 	`short:"l" long:"logcharts" description:"Generate charts from log files"`
 	CDescription	string	`short:"d" long:"dsc" description:"Description for PNG image results" default:"https://zededa.com"`
+	CXcelCharts		bool	`short:"e" long:"excel" description:"Save results to a shared excel table"`
 }
 
 var plotCmd PlotCommand
@@ -109,6 +111,38 @@ const (
 	p99Lat
 )
 
+const barTpl = `
+	{
+		"name": "%s",
+		"categories": "%s!%s",
+		"values": "%s!%s"
+	}%s`
+
+const globalTpl = `{
+	"type": "col",
+	"series":
+	%s
+	,
+	"y_axis":
+	{
+		"major_grid_lines": true,
+		"minor_grid_lines": true
+	},
+	"x_axis":
+	{
+		"major_grid_lines": true
+	},
+	"legend":
+	{
+		"position": "left",
+		"show_legend_key": true
+	},
+	"title":
+	{
+		"name": "%s"
+	}
+}`
+
 func toFixed(x float64, n int) float64 {
 	var l = math.Pow(10, float64(n))
 	var mbs = math.Round(x*l) / l
@@ -117,6 +151,15 @@ func toFixed(x float64, n int) float64 {
 
 func mbps(x int) float64 {
 	return toFixed(float64(x)/1024, 2)
+}
+
+// Round performance value
+func Round(x float64) float64 {
+	t := math.Trunc(x)
+	if math.Abs(x-t) >= 0.5 {
+		return t + math.Copysign(1, x)
+	}
+	return t
 }
 
 func (t *AllRes) parsingCSVfile(dir, fileName string) error {
@@ -228,14 +271,17 @@ func readDirWithResults(dirPath string) ([]fs.FileInfo, error) {
 func getIdenticalPatterns(groups AllRes) ([]string, error) {
 	var allPattern []string
 	uniq := make(map[string]int)
-
+	fmt.Println("Read files:")
 	for _, group := range groups {
-
+		/* This output of a list of files is necessary to
+		* understand which files we are transferring for
+		* comparison. Sometimes it happens that there
+		*are hidden temporary files in the folder! */
+		fmt.Println(group.fileName)
 		for _, result := range group.ioTestResults {
 			uniq[result.pattern]++
 		}
 	}
-
 	for key, val := range uniq {
 		if val == len(groups) {
 			allPattern = append(allPattern, key)
@@ -287,7 +333,8 @@ func (t *patternsTable) getPatternTable(identicalPattern []string, results AllRe
 					var value float64
 					switch val := valueType; val {
 					case Performance:
-						value, _ = strconv.ParseFloat(pattern.groupRes.performance, 64)
+						tmpBw, _ := strconv.ParseFloat(pattern.groupRes.performance, 64)
+						value = Round(tmpBw)
 						stroka.yDiscription = "Mb/s"
 						stroka.fileName = "Performance"
 					case minIOPS:
@@ -404,6 +451,40 @@ func (t *patternsTable) createBarChart(table patternsTable, description, dirPath
 				pattern.patternName, err)
 		}
 	}
+	return nil
+}
+
+//createBarCharts - generate table for all groups between different tests in Excel
+func (t *patternsTable) createExcelTables(table patternsTable, description, filePath string) error {
+
+ 	f, err := excelize.OpenFile(filePath)
+	if err != nil {
+    	return fmt.Errorf("open %s xlsx file failed: %w", filePath, err)
+	}
+
+	rowIter := 2
+	sheetName := ""
+	for _, pattern := range table {
+		if sheetName != pattern.fileName {
+			sheetName = pattern.fileName
+			var headerXSLS = []string{"Pattern"}
+			f.NewSheet(sheetName)
+			f.SetColWidth(sheetName, "A", "A", 25)
+			f.SetSheetRow(sheetName, "A1", &headerXSLS)
+			f.SetSheetRow(sheetName, "B1", &pattern.legends)
+			rowIter = 2
+		}
+		var patternName = []string{pattern.patternName}
+		f.SetSheetRow(sheetName, fmt.Sprintf("A%d", rowIter), &patternName)
+		f.SetSheetRow(sheetName, fmt.Sprintf("B%d", rowIter), &pattern.values)
+		rowIter++
+	}
+
+	f.DeleteSheet("Sheet1") //remove default sheet
+	if err := f.SaveAs(filePath); err != nil {
+		return fmt.Errorf("could save xlsx file failed %w", err)
+	}
+
 	return nil
 }
 
@@ -754,6 +835,112 @@ func initLogCharts(dirWithLogs, discription string) error {
 	return nil
 }
 
+func genExcelfile(pathFile string) bool {
+	f := excelize.NewFile()
+	if err := f.SaveAs(pathFile); err != nil {
+		fmt.Println("could save xlsx file failed %w", err)
+		return false
+	}
+	return true
+}
+
+func createExcelCharts(countStroke int, filePath string) error {
+	f, err := excelize.OpenFile(filePath)
+	if err != nil {
+    	return fmt.Errorf("open %s xlsx file failed: %w", filePath, err)
+	}
+	//letters with a margin
+	str := []string{"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N"}
+	finishStr := []string{}
+	sheets := f.GetSheetList()
+	for index, sheet := range sheets {
+		value, _ := f.GetCellValue(sheet, fmt.Sprintf("%s1", str[index]))
+		if len(value) == 0 {
+			break
+		} else if value == "Pattern" {
+			continue
+		}
+		finishStr = append(finishStr, str[index])
+	}
+
+	f.NewSheet("Bars")
+	barsIndent := 1
+
+	for _, sheet := range sheets {
+		series := []string{}
+		point := ","
+		for i, char := range finishStr {
+			n1, err := f.GetCellValue(sheet, fmt.Sprintf("%s1", char))
+			if err != nil {
+				fmt.Println("kek")
+			}
+			if i == len(finishStr) -1 {
+				point = ""
+			}
+			bar := fmt.Sprintf(barTpl, n1,
+						sheet, fmt.Sprintf("$A$%d:$A$%d", 2, countStroke),
+						sheet, fmt.Sprintf("$%s$%d:$%s$%d", char, 2, char, countStroke), point)
+			series = append(series, bar)
+		}
+
+		chartsP := fmt.Sprintf(globalTpl, series, sheet)
+
+		if err := f.AddChart("Bars", fmt.Sprintf("B%d", barsIndent), chartsP); err != nil {
+			fmt.Println(err)
+		}
+		barsIndent += 20
+	}
+
+	if err := f.SaveAs(filePath); err != nil {
+		return fmt.Errorf("could save xlsx file failed %w", err)
+	}
+	return nil
+}
+
+func initExcelCharts(dirWithCSV, descriptionForGraphs string) error {
+	var testResults = make(AllRes, 0)
+	countStroke := 0
+
+	ex, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("could not get executable path: %w", err)
+	}
+
+	mainResultsFile := filepath.Join(filepath.Dir(ex), "all-results.xlsx")
+	if !genExcelfile(mainResultsFile) {
+		return fmt.Errorf("could not create excel file")
+	}
+
+	fileWithResults, err := readDirWithResults(dirWithCSV)
+	if err != nil {
+		return fmt.Errorf("could not read dir with CSV files: %w", err)
+	}
+
+	for _, file := range fileWithResults {
+		if !file.IsDir() {
+			testResults.parsingCSVfile(dirWithCSV, file.Name())
+		}
+	}
+
+	identicalPatterns, err := getIdenticalPatterns(testResults)
+	if err != nil {
+		return fmt.Errorf("could not get identical patterns: %w", err)
+	}
+
+  	for _, valRes := range []uint16{Performance, minIOPS, maxIOPS, minBW, maxBW, minLat, maxLat, stdLat, p99Lat} {
+		var pTable = make(patternsTable, 0)
+		pTable.getPatternTable(identicalPatterns, testResults, valRes)
+		pTable.createExcelTables(pTable, descriptionForGraphs, mainResultsFile)
+		countStroke = len(pTable)
+	}
+
+	if err := createExcelCharts(countStroke + 1, mainResultsFile); err != nil {
+		return fmt.Errorf("could not create excel charts: %w", err)
+	}
+
+	return nil
+}
+
 func (x *PlotCommand) Execute(args []string) error {
 	if plotCmd.CBarCharts {
 		if err := initBarCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
@@ -762,6 +949,10 @@ func (x *PlotCommand) Execute(args []string) error {
 	} else if plotCmd.CLogCharts {
 		if err := initLogCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
 			return fmt.Errorf("error with create log charts: %w", err)
+		}
+	} else if plotCmd.CXcelCharts {
+		if err := initExcelCharts(plotCmd.CCatalog, plotCmd.CDescription); err != nil {
+			return fmt.Errorf("error with create excel charts: %w", err)
 		}
 	}
 	return nil
