@@ -117,7 +117,3 @@ After everything has been installed and configured, the virtual machine must be 
 * Generating CSV tables
 
 * Plotting graphs based on CSV tables
-
-### License
-
-GNU General Public License v2.0
