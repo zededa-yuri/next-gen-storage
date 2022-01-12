@@ -1,6 +1,0 @@
-cat >user-data <<EOF
-#cloud-config
-password: asdfqwer
-chpasswd: { expire: False }
-ssh_pwauth: True
-EOF
