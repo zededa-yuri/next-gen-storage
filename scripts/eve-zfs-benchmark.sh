@@ -31,6 +31,16 @@ zfs_get_one_param_json() {
     val="$(cat /sys/module/zfs/parameters/"${param}")" || return 1
     printf "\"%s\": %d" "${param}" "${val}"
 }
+
+
+#return nothing if @param does not exists, otherwise @param
+check_zfs_param() {
+    local param="$1"
+    if [ -f /sys/module/zfs/parameters/"${param}" ]; then
+	echo "${param}"
+    fi
+}
+
 get_zfs_params_json() {
     echo "{"
     params="zfs_compressed_arc_enabled \
@@ -56,10 +66,10 @@ zfs_vdev_async_write_min_active \
 zfs_vdev_async_write_max_active \
 "
 
-    new_params="zfs_smoothing_scale zfs_write_smoothing"
-    if [ -f /sys/module/zfs/parameters/zfs_smoothing_scale ]; then
-	params="${params} ${new_params}"
-    fi
+    new_params="zfs_smoothing_scale zfs_write_smoothing zfs_smoothing_write"
+    for param in ${new_params}; do
+	params="${params} $(check_zfs_param "${param}")"
+    done
 
     printf "\"version\": \"%s\"" "$(cat /sys/module/zfs/version)"
     for opt in ${params}; do
