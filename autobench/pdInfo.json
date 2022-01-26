@@ -1,0 +1,23 @@
+{
+  "podName": "hello-eve",
+  "noHyper": false,
+  "appLink": "docker://nginx",
+  "podMetadata": "",
+  "vncDisplay": 0,
+  "vncPassword": "",
+  "portPublish": ["8028:80"],
+  "diskSize": 0,
+  "volumeSize": 209715200,
+  "appMemory": 1048576000,
+  "volumeType": "qcow2",
+  "appCpus": 1,
+  "imageFormat": "",
+  "sftpLoad": false,
+  "directLoad": true,
+  "mount": ["src=./data/helloeve,dst=/usr/share/nginx/html"],
+  "registry": "remote",
+  "openStackMetadata": false,
+  "datastoreOverride": "",
+  "aclOnlyHost": false
+}
+
