@@ -3,6 +3,7 @@ package evehelper
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/lf-edge/eden/pkg/defaults"
 	"github.com/lf-edge/eden/pkg/eden"
@@ -42,7 +43,7 @@ func stopAdam(configFile string) error {
 	adamRm := viper.GetBool("adam-rm")
 
 	if err := eden.StopAdam(adamRm); err != nil {
-		return fmt.Errorf("Cannot stop adam: %s", err)
+		return fmt.Errorf("cannot stop adam: %s", err)
 	}
 	return nil
 }
@@ -50,7 +51,7 @@ func stopAdam(configFile string) error {
 func GetAdamStatus() (string, error) {
 	statusAdam, err := eden.StatusAdam()
 	if err != nil {
-		return "", fmt.Errorf("Cannot obtain status of adam: %s", err)
+		return "", fmt.Errorf("cannot obtain status of adam: %s", err)
 	} else {
 		return statusAdam, nil
 	}
@@ -68,7 +69,7 @@ func StartRedis(cfg EdenSetupArgs) error {
 func StartRegistry(cfg EdenSetupArgs, registryDist string) error {
 
 	if err := eden.StartRegistry(cfg.Registry.Port, cfg.Registry.Tag, registryDist); err != nil {
-		log.Errorf("cannot start registry: %s", err)
+		return fmt.Errorf("cannot start registry: %s", err)
 	} else {
 		log.Infof("registry is running and accesible on port %d", cfg.Registry.Port)
 	}
@@ -99,8 +100,20 @@ func StartEve(cfg EdenSetupArgs, vmName, tapInterface string) error {
 			log.Infof("EVE is starting in Virtual Box")
 		}
 	} else {
-		if err := eden.StartEVEQemu(cfg.Eve.Arch, cfg.Eve.QemuOS, cfg.Eve.ImageFile, cfg.Eve.Serial, cfg.Eve.TelnetPort, cfg.Eve.QemuMonitorPort,
-			cfg.Eve.HostFwd, cfg.Eve.Accel, cfg.Eve.QemuFileToSave, cfg.Eve.Log, cfg.Eve.Pid, tapInterface, false); err != nil {
+		if cfg.Eve.Swtpm {
+			err := eden.StartSWTPM(filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "swtpm"))
+			if err != nil {
+				log.Errorf("cannot start swtpm: %s", err)
+			} else {
+				log.Infof("swtpm is starting")
+			}
+		}
+
+		if err := eden.StartEVEQemu(cfg.Eve.Arch, cfg.Eve.QemuOS, cfg.Eve.ImageFile,
+			cfg.Eve.Serial, cfg.Eve.TelnetPort, cfg.Eve.QemuMonitorPort,
+			cfg.Eve.QemuNetdevSocketPort, cfg.Eve.HostFwd, cfg.Eve.Accel,
+			cfg.Eve.QemuFileToSave, cfg.Eve.Log, cfg.Eve.Pid, tapInterface,
+			0, cfg.Eve.Swtpm, false); err != nil {
 			return fmt.Errorf("cannot start eve: %s", err)
 		} else {
 			log.Infof("EVE is starting")
@@ -112,15 +125,15 @@ func StartEve(cfg EdenSetupArgs, vmName, tapInterface string) error {
 func StartEden(cfg EdenSetupArgs, registryDist, vmName, tapInterface string) error {
 
 	if err := StartRedis(cfg); err != nil {
-		return fmt.Errorf("Cannot start adam %s", err)
+		return fmt.Errorf("cannot start adam %s", err)
 	}
 
 	if err := StartAdam(cfg); err != nil {
-		return fmt.Errorf("Cannot start adam %s", err)
+		return fmt.Errorf("cannot start adam %s", err)
 	}
 
 	if err := StartRegistry(cfg, registryDist); err != nil {
-		return fmt.Errorf("Cannot start registry %s", err)
+		return fmt.Errorf("cannot start registry %s", err)
 	} else {
 		log.Info("Registry is running and accesible on port %d", cfg.Registry.Port)
 	}
@@ -130,7 +143,7 @@ func StartEden(cfg EdenSetupArgs, registryDist, vmName, tapInterface string) err
 	}
 
 	if err := StartEve(cfg, vmName, tapInterface); err != nil {
-		return fmt.Errorf("Cannot start registry %s", err)
+		return fmt.Errorf("cannot start registry %s", err)
 	} else {
 		log.Info("Registry is running and accesible on port %d", cfg.Registry.Port)
 	}

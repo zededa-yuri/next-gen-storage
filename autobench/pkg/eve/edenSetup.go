@@ -21,35 +21,21 @@ import (
 	"golang.org/x/term"
 )
 
-func generateScripts(in string, out string, configFile string) {
-	tmpl, err := ioutil.ReadFile(in)
-	if err != nil {
-		log.Fatal(err)
-	}
-	script, err := utils.RenderTemplate(configFile, string(tmpl))
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = ioutil.WriteFile(out, []byte(script), 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-
 func SetupEden(cfg EdenSetupArgs) error {
 
 	model, err := models.GetDevModelByName(cfg.Eve.DevModel)
 	if err != nil {
-		log.Fatalf("GetDevModelByName: %s", err)
+		return fmt.Errorf("getDevModelByName: %s", err)
 	}
 	if cfg.Netboot && cfg.Installer {
-		log.Fatal("Please use netboot or installer flag, not both")
+		return fmt.Errorf("please use netboot or installer flag, not both")
 	}
 	if cfg.Netboot || cfg.Installer {
 		if cfg.Eve.DevModel != defaults.DefaultGeneralModel {
-			log.Fatalf("Cannot use netboot for devmodel %s, please use general instead", cfg.Eve.DevModel)
+			return fmt.Errorf("cannot use netboot for devmodel %s, please use general instead", cfg.Eve.DevModel)
 		}
 	}
+
 	if cfg.Eve.DevModel == defaults.DefaultQemuModel {
 		if _, err := os.Stat(cfg.Eve.QemuFileToSave); os.IsNotExist(err) {
 			f, err := os.Create(cfg.Eve.QemuFileToSave)
@@ -60,7 +46,7 @@ func SetupEden(cfg EdenSetupArgs) error {
 			if cfg.Eve.QemuDTBPath != "" {
 				qemuDTBPathAbsolute, err = filepath.Abs(cfg.Eve.QemuDTBPath)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 			}
 			var qemuFirmwareParam []string
@@ -77,14 +63,14 @@ func SetupEden(cfg EdenSetupArgs) error {
 			}
 			conf, err := settings.GenerateQemuConfig()
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			_, err = f.Write(conf)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			if err := f.Close(); err != nil {
-				log.Fatal(err)
+				return err
 			}
 			log.Infof("QEMU config file generated: %s", cfg.Eve.QemuFileToSave)
 		} else {
@@ -100,7 +86,7 @@ func SetupEden(cfg EdenSetupArgs) error {
 			fmt.Println()
 		}
 		if cfg.ZedcontrolURL == "" {
-			if err := eden.GenerateEveCerts(cfg.Eden.CertsDir, cfg.Adam.CertsDomain, cfg.Adam.CertsIP, cfg.Adam.CertsEVEIP, cfg.Eve.CertsUUID, cfg.Eve.DevModel, cfg.Eve.Ssid, wifiPSK, cfg.Adam.ApiV1); err != nil {
+			if err := eden.GenerateEveCerts(cfg.Eden.CertsDir, cfg.Adam.CertsDomain, cfg.Adam.CertsIP, cfg.Adam.CertsEVEIP, cfg.Eve.CertsUUID, cfg.Eve.DevModel, cfg.Eve.Ssid, wifiPSK, cfg.Eve.GrubOptions, cfg.Adam.ApiV1); err != nil {
 				return fmt.Errorf("cannot GenerateEveCerts: %s", err)
 			} else {
 				log.Info("GenerateEveCerts done")
@@ -152,7 +138,7 @@ func SetupEden(cfg EdenSetupArgs) error {
 				log.Info("MakeEveInRepo done")
 			}
 			if err = utils.CopyFile(builedImage, cfg.Eve.ImageFile); err != nil {
-				log.Fatal(err)
+				return err
 			}
 			builedAdditionalSplitted := strings.Split(builedAdditional, ",")
 			for _, additionalFile := range builedAdditionalSplitted {
@@ -183,7 +169,7 @@ func SetupEden(cfg EdenSetupArgs) error {
 		}
 		imageTag, err := eveDesc.Image()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 		if cfg.Netboot {
 			if err := utils.DownloadEveNetBoot(eveDesc, filepath.Dir(cfg.Eve.ImageFile)); err != nil {
@@ -211,43 +197,44 @@ func SetupEden(cfg EdenSetupArgs) error {
 					} else {
 						r, err := os.Open(filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "kernel.old"))
 						if err != nil {
-							log.Fatalf("Open kernel.old: %v", err)
+							return fmt.Errorf("open kernel.old: %v", err)
 						}
 						uncompressedStream, err := gzip.NewReader(r)
 						if err != nil {
 							// in case of non-gz rename back
-							return fmt.Errorf("gzip: NewReader failed: %v", err)
+							log.Infof("gzip: NewReader failed: %v", err)
 							if err := os.Rename(filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "kernel.old"),
 								filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "kernel")); err != nil {
-								log.Fatalf("Cannot rename kernel: %v", err)
+								return fmt.Errorf("cannot rename kernel: %v", err)
 							}
 						} else {
 							defer uncompressedStream.Close()
 							out, err := os.Create(filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "kernel"))
 							if err != nil {
-								log.Fatalf("Cannot create file to save: %v", err)
+								return fmt.Errorf("cannot create file to save: %v", err)
 							}
 							if _, err := io.Copy(out, uncompressedStream); err != nil {
-								log.Fatalf("Cannot copy to decompressed file: %v", err)
+								return fmt.Errorf("cCannot copy to decompressed file: %v", err)
 							}
 							if err := out.Close(); err != nil {
-								log.Fatalf("Cannot close file: %v", err)
+								return fmt.Errorf("cannot close file: %v", err)
 							}
 						}
 					}
 				}
+				prefix := ""
 				items, _ := ioutil.ReadDir(filepath.Dir(cfg.Eve.ImageFile))
 				for _, item := range items {
 					if !item.IsDir() && item.Name() != "ipxe.efi.cfg" {
-						if _, err := eden.AddFileIntoEServer(server, filepath.Join(filepath.Dir(cfg.Eve.ImageFile), item.Name())); err != nil {
-							log.Fatalf("AddFileIntoEServer: %s", err)
+						if _, err := eden.AddFileIntoEServer(server, filepath.Join(filepath.Dir(cfg.Eve.ImageFile), item.Name()), prefix); err != nil {
+							return fmt.Errorf("addFileIntoEServer: %s", err)
 						}
 					}
 				}
 				ipxeFile := filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "ipxe.efi.cfg")
 				ipxeFileBytes, err := ioutil.ReadFile(ipxeFile)
 				if err != nil {
-					log.Fatalf("Cannot read ipxe file: %v", err)
+					return fmt.Errorf("cannot read ipxe file: %v", err)
 				}
 				re := regexp.MustCompile("# set url .*")
 				ipxeFileReplaced := re.ReplaceAll(ipxeFileBytes,
@@ -260,8 +247,8 @@ func SetupEden(cfg EdenSetupArgs) error {
 				_ = os.MkdirAll(filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "tftp"), 0777)
 				ipxeConfigFile := filepath.Join(filepath.Dir(cfg.Eve.ImageFile), "tftp", "ipxe.efi.cfg")
 				_ = ioutil.WriteFile(ipxeConfigFile, ipxeFileReplaced, 0777)
-				if _, err := eden.AddFileIntoEServer(server, ipxeConfigFile); err != nil {
-					log.Fatalf("AddFileIntoEServer: %s", err)
+				if _, err := eden.AddFileIntoEServer(server, ipxeConfigFile, prefix); err != nil {
+					return fmt.Errorf("addFileIntoEServer: %s", err)
 				}
 				log.Infof("download EVE done: %s", imageTag)
 				log.Infof("Please use %s to boot your EVE via ipxe", ipxeConfigFile)

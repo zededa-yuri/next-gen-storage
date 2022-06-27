@@ -13,9 +13,9 @@ import (
 )
 
 type EveCommand struct {
-	registryDist string `long:"registry-dist" description:"Registry dist path to store (required)"`
-	vmName       string `long:"vmname" description:"vbox vmname required to create vm"`
-	tapInterface string `long:"with-tap" description:"use tap interface in qemu as the third"`
+	RegistryDist string `short:"r" long:"registry-dist" description:"Registry dist path to store (required)"`
+	VmName       string `short:"v" long:"vmname" description:"vbox vmname required to create vm"`
+	TapInterface string `short:"t" long:"with-tap" description:"use tap interface in qemu as the third"`
 }
 
 var eveCmd EveCommand
@@ -24,7 +24,7 @@ func (x *EveCommand) Execute(args []string) error {
 	configFilepath, err := utils.DefaultConfigPath()
 
 	if err != nil {
-		return fmt.Errorf("Could not load default config path %s", err)
+		return fmt.Errorf("could not load default config path %s", err)
 	}
 
 	if _, err := os.Stat(configFilepath); errors.Is(err, os.ErrNotExist) {
@@ -49,7 +49,7 @@ func (x *EveCommand) Execute(args []string) error {
 	if err = evehelper.StartEServer(*eveCfg); err != nil {
 		return fmt.Errorf("error start eserver %s", err)
 	}
-	if err = evehelper.StartEden(*eveCfg, eveCmd.registryDist, eveCmd.vmName, eveCmd.tapInterface); err != nil {
+	if err = evehelper.StartEden(*eveCfg, eveCmd.RegistryDist, eveCmd.VmName, eveCmd.TapInterface); err != nil {
 		return fmt.Errorf("error starting eden %s", err)
 	}
 	if err = evehelper.OnboardEve(eveCfg.Eve.CertsUUID); err != nil {
@@ -65,7 +65,10 @@ func (x *EveCommand) Execute(args []string) error {
 	if err := json.Unmarshal([]byte(pdInfoFile), &pdInfo); err != nil {
 		return fmt.Errorf("error reading pod info file %s", err)
 	}
-	evehelper.PodDeploy(*eveCfg, pdInfo)
+
+	if err := evehelper.PodDeploy(*eveCfg, pdInfo); err != nil {
+		return fmt.Errorf("error deploying pod %s", err)
+	}
 
 	return nil
 }
