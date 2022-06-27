@@ -132,7 +132,7 @@ func PodDeploy(cfg EdenSetupArgs, podData PodInfo) error {
 	changer := &adamChanger{}
 	ctrl, dev, err := changer.getControllerAndDev()
 	if err != nil {
-		log.Fatalf("getControllerAndDev: %s", err)
+		return fmt.Errorf("getControllerAndDev: %s", err)
 	}
 	var opts []expect.ExpectationOption
 	opts = append(opts, expect.WithMetadata(podData.PodMetadata))
@@ -153,7 +153,7 @@ func PodDeploy(cfg EdenSetupArgs, podData PodInfo) error {
 	}
 	diskSizeParsed, err := humanize.ParseBytes(humanize.Bytes(podData.DiskSize))
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	opts = append(opts, expect.WithDiskSize(int64(diskSizeParsed)))
 	volumeSizeParsed := podData.VolumeSize
@@ -172,7 +172,7 @@ func PodDeploy(cfg EdenSetupArgs, podData PodInfo) error {
 	}
 	vlansParsed, err := processVLANs(podData.Vlans)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	opts = append(opts, expect.WithVLANs(vlansParsed))
 	opts = append(opts, expect.WithSFTPLoad(podData.SftpLoad))
@@ -180,13 +180,12 @@ func PodDeploy(cfg EdenSetupArgs, podData PodInfo) error {
 		opts = append(opts, expect.WithHTTPDirectLoad(podData.DirectLoad))
 	}
 	opts = append(opts, expect.WithAdditionalDisks(append(podData.Disks, podData.Mount...)))
-	registryToUse := podData.Registry
-	switch podData.Registry {
-	case "local":
+
+	registryToUse := ""
+	if podData.Registry == "local" {
 		registryToUse = fmt.Sprintf("%s:%d", viper.GetString("registry.ip"), viper.GetInt("registry.port"))
-	case "remote":
-		registryToUse = ""
 	}
+
 	opts = append(opts, expect.WithRegistry(registryToUse))
 	if podData.NoHyper {
 		opts = append(opts, expect.WithVirtualizationMode(config.VmMode_NOHYPER))
@@ -194,13 +193,15 @@ func PodDeploy(cfg EdenSetupArgs, podData PodInfo) error {
 	opts = append(opts, expect.WithOpenStackMetadata(podData.OpenStackMetadata))
 	opts = append(opts, expect.WithProfiles(podData.Profiles))
 	opts = append(opts, expect.WithDatastoreOverride(podData.DatastoreOverride))
-	fmt.Println("ABCDEFG %s", podData.AppLink)
+	fmt.Println("podData.AppLink: ", podData.AppLink)
+
 	expectation := expect.AppExpectationFromURL(ctrl, dev, podData.AppLink, podData.PodName, opts...)
 	appInstanceConfig := expectation.Application()
 	dev.SetApplicationInstanceConfig(append(dev.GetApplicationInstances(), appInstanceConfig.Uuidandversion.Uuid))
 	if err = changer.setControllerAndDev(ctrl, dev); err != nil {
-		log.Fatalf("setControllerAndDev: %s", err)
+		return fmt.Errorf("setControllerAndDev: %s", err)
 	}
 	log.Infof("deploy pod %s with %s request sent", appInstanceConfig.Displayname, podData.AppLink)
+
 	return nil
 }

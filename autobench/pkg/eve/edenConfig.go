@@ -62,33 +62,36 @@ type AdamConfig struct {
 }
 
 type EveConfig struct {
-	QemuFirmware    []string          `mapstructure:"firmware"`
-	QemuConfigPath  string            `mapstructure:"config-part"`
-	QemuDTBPath     string            `mapstructure:"dtb-part"`
-	QemuOS          string            `mapstructure:"os"`
-	ImageFile       string            `mapstructure:"image-file"`
-	CertsUUID       string            `mapstructure:"uuid"`
-	Dist            string            `mapstructure:"dist"`
-	Repo            string            `mapstructure:"repo"`
-	Registry        string            `mapstructure:"registry"`
-	Tag             string            `mapstructure:"tag"`
-	UefiTag         string            `mapstructure:"uefi-tag"`
-	HV              string            `mapstructure:"hv"`
-	Arch            string            `mapstructure:"arch"`
-	HostFwd         map[string]string `mapstructure:"hostfwd"`
-	QemuFileToSave  string            `mapstructure:"qemu-config"`
-	QemuCpus        int               `mapstructure:"cpu"`
-	QemuMemory      int               `mapstructure:"ram"`
-	ImageSizeMB     int               `mapstructure:"disk"`
-	DevModel        string            `mapstructure:"devmodel"`
-	Ssid            string            `mapstructure:"ssid"`
-	Serial          string            `mapstructure:"serial"`
-	Accel           bool              `mapstructure:"accel"`
-	QemuMonitorPort int               `mapstructure:"eve.qemu-monitor-port"`
-	Pid             string            `mapstructure:"pid"`
-	Log             string            `mapstructure:"log"`
-	TelnetPort      int               `mapstructure:"eve.telnet-port"`
-	Remote          bool              `mapstructure:"remote"`
+	QemuFirmware         []string          `mapstructure:"firmware"`
+	QemuConfigPath       string            `mapstructure:"config-part"`
+	QemuDTBPath          string            `mapstructure:"dtb-part"`
+	QemuOS               string            `mapstructure:"os"`
+	GrubOptions          []string          `mapstructure:"grub-options"`
+	ImageFile            string            `mapstructure:"image-file"`
+	CertsUUID            string            `mapstructure:"uuid"`
+	Dist                 string            `mapstructure:"dist"`
+	Repo                 string            `mapstructure:"repo"`
+	Registry             string            `mapstructure:"registry"`
+	Tag                  string            `mapstructure:"tag"`
+	UefiTag              string            `mapstructure:"uefi-tag"`
+	HV                   string            `mapstructure:"hv"`
+	Arch                 string            `mapstructure:"arch"`
+	HostFwd              map[string]string `mapstructure:"hostfwd"`
+	QemuFileToSave       string            `mapstructure:"qemu-config"`
+	QemuCpus             int               `mapstructure:"cpu"`
+	QemuMemory           int               `mapstructure:"ram"`
+	ImageSizeMB          int               `mapstructure:"disk"`
+	DevModel             string            `mapstructure:"devmodel"`
+	Ssid                 string            `mapstructure:"ssid"`
+	Serial               string            `mapstructure:"serial"`
+	Accel                bool              `mapstructure:"accel"`
+	QemuMonitorPort      int               `mapstructure:"eve.qemu-monitor-port"`
+	QemuNetdevSocketPort int               `mapstructure:"eve.qemu-netdev-socket-port"`
+	Pid                  string            `mapstructure:"pid"`
+	Log                  string            `mapstructure:"log"`
+	TelnetPort           int               `mapstructure:"eve.telnet-port"`
+	Remote               bool              `mapstructure:"remote"`
+	Swtpm                bool              `mapstructure:"eve.tpm"`
 }
 
 type RegistryConfig struct {
@@ -119,14 +122,14 @@ func LoadConfig(configFile string) (*EdenSetupArgs, error) {
 	}
 
 	if !viperLoaded {
-		return nil, fmt.Errorf("Viper cannot be loaded")
+		return nil, fmt.Errorf("viper cannot be loaded")
 	}
 	viper.SetDefault("eve.uefi-tag", defaults.DefaultEVETag)
 
 	cfg := &EdenSetupArgs{}
 
 	if err = viper.Unmarshal(cfg); err != nil {
-		fmt.Errorf("unable to decode into config struct, %v", err)
+		log.Error("unable to decode into config struct, %v", err)
 	}
 
 	cfg.Eden.BinDir = utils.ResolveAbsPath(cfg.Eden.BinDir)
